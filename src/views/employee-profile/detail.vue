@@ -1120,7 +1120,7 @@ const exporting = ref(false)
 const handleExportProfile = async () => {
   if (!employee.value || exporting.value) return
   exporting.value = true
-  const hide = Message.loading({ content: '正在生成档案包...', duration: 0 })
+  const loadingMsg = Message.loading({ content: '正在生成档案包...', duration: 0 })
   try {
     const { fileCount, zipName } = await downloadEmployeeProfile(employee.value)
     Message.success(`已导出 ${fileCount} 个文件：${zipName}`)
@@ -1128,7 +1128,7 @@ const handleExportProfile = async () => {
     console.error(err)
     Message.error('导出失败，请重试')
   } finally {
-    hide()
+    loadingMsg.close()
     exporting.value = false
   }
 }
