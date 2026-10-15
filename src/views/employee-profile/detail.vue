@@ -7,7 +7,7 @@
         <a-breadcrumb-item>员工详情</a-breadcrumb-item>
       </a-breadcrumb>
       <div class="detail-actions">
-        <a-button type="primary">
+        <a-button type="primary" :loading="exporting" @click="handleExportProfile">
           <template #icon><icon-download /></template>
           导出档案
         </a-button>
@@ -1072,6 +1072,7 @@ import {
 } from '@arco-design/web-vue/es/icon'
 import { Message, Modal } from '@arco-design/web-vue'
 import { maskIdCard, maskPhone } from '@/utils/format'
+import { downloadEmployeeProfile } from '@/utils/profileExport'
 
 const route = useRoute()
 const router = useRouter()
@@ -1113,6 +1114,24 @@ const statusText = (s: Employee['status']) =>
   ({ active: '在职', probation: '试用期', leave: '休假', resigned: '离职' }[s])
 const statusColor = (s: Employee['status']) =>
   ({ active: 'green', probation: 'orange', leave: 'gray', resigned: 'red' }[s])
+
+/** 导出档案进行中状态 */
+const exporting = ref(false)
+const handleExportProfile = async () => {
+  if (!employee.value || exporting.value) return
+  exporting.value = true
+  const hide = Message.loading({ content: '正在生成档案包...', duration: 0 })
+  try {
+    const { fileCount, zipName } = await downloadEmployeeProfile(employee.value)
+    Message.success(`已导出 ${fileCount} 个文件：${zipName}`)
+  } catch (err) {
+    console.error(err)
+    Message.error('导出失败，请重试')
+  } finally {
+    hide()
+    exporting.value = false
+  }
+}
 
 const formatPeriod = (period: string[]) =>
   Array.isArray(period) && period.length === 2 ? `${period[0]} ~ ${period[1]}` : '—'
