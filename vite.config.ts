@@ -3,10 +3,10 @@ import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 import { fileURLToPath } from 'url'
 
-// GitHub Pages 项目站点部署在 /material-system/ 子路径下,
+// GitHub Pages 项目站点部署在 /employee-360-profile/ 子路径下,
 // 因此打包时需要设置 base;本地 dev 仍然使用根路径。
 export default defineConfig(({ command }) => ({
-  base: command === 'build' ? '/material-system/' : '/',
+  base: command === 'build' ? '/employee-360-profile/' : '/',
   plugins: [vue()],
   resolve: {
     alias: {

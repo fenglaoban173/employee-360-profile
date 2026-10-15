@@ -1,7 +1,7 @@
 {
-  "name": "arco-material-system",
+  "name": "employee-360-profile",
   "version": "1.0.0",
-  "description": "巨量引擎素材库管理系统 - Arco Pro Vue",
+  "description": "员工360档案管理系统 - Arco Pro Vue",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,18 +11,13 @@
   },
   "dependencies": {
     "@arco-design/web-vue": "^2.55.0",
-    "axios": "^1.6.0",
-    "dayjs": "^1.11.0",
-    "echarts": "^6.0.0",
-    "lodash-es": "^4.17.21",
+    "jszip": "^3.10.2",
     "pinia": "^2.1.0",
-    "plyr": "^3.8.4",
     "vue": "^3.4.0",
-    "vue-echarts": "^8.0.1",
-    "vue-plyr": "^7.0.0",
     "vue-router": "^4.3.0"
   },
   "devDependencies": {
+    "@types/jszip": "^3.4.0",
     "@types/node": "^20.12.0",
     "@vitejs/plugin-vue": "^5.0.0",
     "sass": "^1.75.0",

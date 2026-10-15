@@ -42,6 +42,7 @@ import {
   IconThunderbolt,
   IconUserGroup,
   IconHistory,
+  IconExport,
   IconArrowRise,
   IconArrowFall,
 } from '@arco-design/web-vue/es/icon'
@@ -59,6 +60,7 @@ type IconKey =
   | 'thunderbolt'
   | 'user-group'
   | 'history'
+  | 'export'
 
 type Theme = 'primary' | 'success' | 'warning' | 'error' | 'info' | 'purple' | 'cyan'
 
@@ -102,6 +104,7 @@ const ICON_MAP: Record<IconKey, Component> = {
   thunderbolt: IconThunderbolt as unknown as Component,
   'user-group': IconUserGroup as unknown as Component,
   history: IconHistory as unknown as Component,
+  export: IconExport as unknown as Component,
 }
 
 const iconComp = computed(() => ICON_MAP[props.icon])

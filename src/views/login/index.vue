@@ -1,7 +1,7 @@
 <template>
   <div class="login-container">
     <div class="login-card">
-      <h2>巨量引擎素材库管理系统</h2>
+      <h2>员工360档案</h2>
       <div class="login-form">
         <a-input v-model="form.username" placeholder="用户名" size="large" class="mb-16">
           <template #prefix><icon-user /></template>
