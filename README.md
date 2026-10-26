@@ -1,6 +1,6 @@
 # 员工 360° 档案
 
-> 一个**纯前端 mock**的员工档案管理系统：列表筛选 / 详情 8 Tab / 真实 ZIP 批量导出。
+> 一个**纯前端 mock** 的员工档案管理系统：列表筛选 / 详情 8 Tab / 真实 ZIP 批量导出 / 9 sheet Excel 档案。
 
 基于 **Vue 3 + TypeScript + Arco Design Vue 2.55 + Vite 5** 实现，所有数据来自前端 `reactive` mock，无需后端。
 
@@ -11,26 +11,27 @@
 - 登录页已预填演示账号（任意账号密码即可登录），直接点「登录」进入
 - 当前为前端 mock 阶段，不接真实后端
 
-> 每次推 `main` 后由 GitHub Actions 自动构建并发布。
+> 每次推 `main` 后由 GitHub Actions 自动构建并发布到 GitHub Pages。
 
 ## 项目特性
 
 - **Vue 3** `<script setup>` Composition API
-- **TypeScript** 全量类型（Employee 38 字段 + 7 个子类型）
+- **TypeScript** 全量类型（`Employee` 43 个字段 + 15 个子类型）
 - **Arco Design Vue 2.55** 组件库
 - **Vue Router 4** Hash 模式（兼容静态部署，避免 404）
 - **Pinia** 用户状态
 - **JSZip** 真实 ZIP 包生成（每个员工一个文件夹）
-- **Vite 5** 构建，1148 modules / 4.5s
+- **ExcelJS** 客户端生成 9 sheet 的 `.xlsx` 档案（详情页导出 / 列表页批量导出共用）
+- **Vite 5** 构建，1151 modules / ≈7s
 
 ## 功能模块
 
 | 模块 | 路径 | 说明 |
 |---|---|---|
-| **员工档案列表** | `#/employee-profile` | 5 张统计指标卡 + 快捷 Tab + 高级筛选 + 9 列表格 + 批量操作 |
+| **员工档案列表** | `#/employee-profile` | 6 张统计指标卡 + 快捷 Tab + 高级筛选 + 10 列表格（9 列数据 + 操作列）+ 批量操作 |
 | **员工档案详情** | `#/employee-profile/:id` | 基础信息卡 + 8 个 Tab（基本信息 / 家庭 / 工作 / 教育 / 合同 / 转正 / 培训 / 附件） |
-| **新增 / 编辑抽屉** | 列表内嵌 | 7 大区块表单，940px 右侧抽屉 |
-| **批量导出** | 列表「批量导出」 | 统一配置 + 按员工微调 → 真实 ZIP 下载 |
+| **新增 / 编辑抽屉** | 列表内嵌 | 6 大区块表单，940px 右侧抽屉 |
+| **批量导出** | 列表「批量导出」 | 统一配置 + 按员工微调 → 真实 ZIP 下载（每人 1 份 Excel） |
 | **登录 / 404** | `#/login` / `*` | 登录 mock + 404 占位 |
 
 ## 快速开始
@@ -56,16 +57,17 @@ npm run preview
 
 ```
 员工360档案/
-├── prd/
-│   └── 员工360档案-PRD.md        # 完整功能 PRD（4 大部分 / 8 Tab 详解）
 ├── public/
 │   ├── logo.svg
-│   └── growth/                   # 详情页成长记录 5 张图标
-│       ├── entry.png             #   入职
-│       ├── regularization.png    #   转正
-│       ├── training.png          #   培训
-│       ├── transfer.png          #   调岗
-│       └── resignation.svg       #   离职
+│   ├── mock/
+│   │   └── regularization-doc.html  # 转正文档 iframe 预览用的本地模拟页
+│   └── growth/                      # 详情页成长记录图标（stepper 用 5 张：入职/转正/培训/调岗/离职）
+│       ├── entry.png                #   入职
+│       ├── performance.png          #   绩效（预留，stepper 未启用）
+│       ├── regularization.png       #   转正
+│       ├── training.png             #   培训
+│       ├── transfer.png             #   调岗
+│       └── resignation.svg          #   离职
 ├── src/
 │   ├── components/
 │   │   └── StatCard.vue          # 列表顶部通用指标卡
@@ -79,11 +81,12 @@ npm run preview
 │   │   ├── variables.scss        # SCSS 变量
 │   │   └── global.scss           # 全局样式
 │   ├── utils/
-│   │   ├── format.ts             # maskIdCard / maskPhone
-│   │   └── batchExport.ts        # JSZip 打包 + 触发下载
+│   │   ├── format.ts             # maskIdCard / maskPhone / relativeTime / formatShortDateTime
+│   │   ├── batchExport.ts        # JSZip 打包 + 触发下载
+│   │   └── profileExport.ts      # buildEmployeeExcelBuffer()：9 sheet Excel 统一构建
 │   ├── views/
 │   │   ├── employee-profile/
-│   │   │   ├── data.ts           # Employee 类型 + 7 条 mock
+│   │   │   ├── data.ts           # Employee 等 16 个类型 + 10 条 mock + 考评表模板
 │   │   │   ├── index.vue         # 列表
 │   │   │   └── detail.vue        # 详情
 │   │   ├── login/index.vue
@@ -93,21 +96,37 @@ npm run preview
 ├── index.html
 ├── vite.config.ts
 ├── tsconfig.json
+├── tsconfig.node.json
 └── package.json
 ```
 
 ## 关键设计
 
 ### 列表筛选三段式
-- **顶部 5 张 StatCard**：纯展示指标，不联动筛选
-- **快捷 Tab**：在职状态组（4 项）+ 工作地点组（5 项），带 count 角标
+- **顶部 6 张 StatCard**：员工档案总数 / 在职 / 试用期 / 实习期 / 本月新入职 / 本月离职，纯展示不联动筛选
+- **快捷 Tab**：在职状态组（全部 / 在职 / 试用期 / 实习期 / 离职）+ 工作地点组（全部 / 北京 / 上海 / 成都 / 深圳），带 count 角标
 - **高级筛选行**：姓名搜索 / 员工类别 / 部门 / 入职日期范围 / 离职日期范围
+
+### 新增 / 编辑档案抽屉
+同一个抽屉承载两种模式（标题切换「添加员工档案」/「编辑员工档案」），共 6 大区块：
+
+| 区块 | 字段要点 |
+|---|---|
+| 岗位信息 | 部门（下拉）· 岗位（输入）· **工作地点（下拉）** · 合同类型（下拉） |
+| 基本信息 | 姓名 / 性别 / 民族 / 学历 / 出生日期 / 联系电话 / 婚姻状况 / 现在住址 / 紧急联系人 / 紧急电话 / 户籍地址 / 身份证号 / 电子邮箱 + 照片上传 |
+| 教育经历 | 可增删多行：起止日期 / 学历学位 / 毕业学校 / 专业 |
+| 主要家庭成员 | 可增删多行：成员关系 / 姓名 / 工作单位 / 电话 |
+| 工作经历 | 可增删多行：起止日期 / 工作单位 / 职务 / 证明人 / 证明人电话 / 离职原因 |
+| 劳动关系 | 是否与原单位解除劳动合同 |
+
+**下拉选项统一收敛**：`部门`、`合同类型`、`员工类别`、`工作地点` 等选项集中定义，与列表页筛选共用同一份数据源
+（如 `workLocationOptions = ['北京', '上海', '成都', '深圳']` 同时驱动表单下拉与工作地点筛选页签）。
 
 ### 批量导出双板块
 - **统一配置**（顶部横排 13 项）：身份证证件 / 银行卡证件 / 白底照片 / 学历证书 / 离职证明 / 体检报告 / 个人简历 / 薪资流水 / 入职通知书 / 廉洁从业规定 / 入职承诺书 / 保密协议 / 劳动合同
 - **按员工微调**（底部右侧）：可单独覆盖某员工的导出项
 - **优先级**：微调 > 统一，未自定义的员工自动沿用统一配置
-- **下载**：`员工档案批量导出_N人_M份_YYYY-MM-DD.zip`，每个员工一个文件夹
+- **下载**：`员工档案批量导出_N人_M份_YYYY-MM-DD.zip`，每个员工一个文件夹，**每人必含 1 份 9 sheet Excel**
 
 ```
 员工档案批量导出_10人_50份_2026-10-26.zip
@@ -121,34 +140,34 @@ npm run preview
 ```
 
 > Excel 的 9 个 sheet（首页信息 / 基本信息 / 家庭成员 / 工作经历 / 教育经历 / 合同信息 / 转正记录 / 培训记录 / 附件资料）
-> 由 `utils/profileExport.ts` 的 `buildEmployeeExcelBuffer()` 统一构建，详情页导出与列表页批量导出共用同一套逻辑。
+> 由 `utils/profileExport.ts` 的 `buildEmployeeExcelBuffer()` 统一构建，详情页「导出档案」与列表页「批量导出」共用同一套逻辑。
 
 ### 详情页 8 Tab
-| Tab | 数据来源 |
-|---|---|
-| 基本信息 | Employee 顶层字段 + 5 节点成长记录 stepper |
-| 家庭成员 | `Employee.family[]` |
-| 工作经历 | `Employee.workHistory[]` |
-| 教育经历 | `Employee.educationHistory[]` |
-| 合同信息 | `Employee.contracts[]` + 抽屉增删改 |
-| 转正记录 | `Employee.regularizations[0]`（飞书同步，只读：审批详情 + 审批记录时间轴 + 考核记录考评表） |
-| 培训记录 | `Employee.trainings[]` + 抽屉增删改 |
-| 附件资料 | `Employee.attachments[]` + 抽屉增删改（13 分类） |
+| Tab | 数据来源 | 可编辑 |
+|---|---|---|
+| 基本信息 | Employee 顶层字段 + 5 节点成长记录 stepper | 否 |
+| 家庭成员 | `Employee.family[]` | 否 |
+| 工作经历 | `Employee.workHistory[]` | 否 |
+| 教育经历 | `Employee.educationHistory[]` | 否 |
+| 合同信息 | `Employee.contracts[]` | 抽屉增删改 |
+| 转正记录 | `Employee.regularizations[0]`（飞书同步） | 否，只读 |
+| 培训记录 | `Employee.trainings[]` | 抽屉增删改 |
+| 附件资料 | `Employee.attachments[]`（13 分类） | 抽屉增删改 |
 
 ### 通用删除确认弹窗
-全站统一 `requestDeleteConfirm(title, content, action)` 调用，6 个触发场景：
-- 列表行删除 / 批量删除
-- 详情页合同 / 培训 / 附件删除
+全站统一 `requestDeleteConfirm(title, content, action)` 调用，**5 个触发场景**：
+- 列表行删除 / 列表批量删除
+- 详情页合同删除 / 培训删除 / 附件删除
 
 ### 转正记录（只读，飞书同步）
-数据由飞书审批同步，前端不提供增删改：
+数据由飞书审批同步，前端不提供增删改。当前 mock 中 6 位员工有转正记录、共 13 份考评表。
 
 ```
 审批详情
   部门      技术部
   入职时间  2022-04-18
   转正日期  2022-07-18
-  转正文档  技术部-转正述职文档-张明远   ← iframe 内嵌预览，可展开/收起、可新标签页打开
+  转正文档  技术部-转正述职文档-张明远   ← iframe 内嵌预览，默认收起，点箭头展开，可新标签页打开
 
 审批记录（垂直时间轴，左侧竖线 + 节点圆点，右侧 人名 / 状态 / 时间）
   ●  [提交]  张明远  [已提交]              1 个月前
@@ -171,12 +190,19 @@ npm run preview
                     └ 注：满分100分，90—100分，同意转正…             ┘
 ```
 
-考评表与纸质《员工转正考评表》一致：3 个考核项目（工作业绩 40 / 工作态度 30 / 综合能力 30）共 12 个评价要点，
+**转正文档**：飞书云文档，iframe 内嵌预览。**默认收起**（只留工具条一行：文档图标 + 文件名 + 新标签页打开 + 展开箭头），
+点箭头展开 / 收起，避免一进页面就加载外部文档。
+
+**审批记录时间轴**：左侧竖线 + 节点圆点，右侧「人名 / 状态 / 相对时间 + 绝对时间」。
+圆点按结果着色：已同意 / 自动通过 = 绿，已拒绝 / 已撤销 = 红，已提交 = 灰。
+
+**考核记录考评表**与纸质《员工转正考评表》一致：3 个考核项目（工作业绩 40 / 工作态度 30 / 综合能力 30）共 12 个评价要点，
 每项带评价标准与项目分值，底部是得分 / 结论（正常转正 · 延长试用 · 劝退）+ 意见栏 + 3 条说明。
 
 **信息层级设计**（解决"表格密、找不到重点"）：
 
 - **顶部信息条**承载"谁在评、评谁、什么时候"，不再占用表格行
+- **出勤 / 入职 / 转正**降级为一排小 chip，不占表格行
 - **3 个考核项目拆成独立分组卡片**，组标题右侧给该组小计（如 `37 / 40`）并按得分率标色，一眼看组内水平
 - **评价标准降级为 12px 灰色小字**（最多 2 行，超出省略，hover `title` 看全文）——它是「查阅资料」不是「阅读对象」
 - **单项得分用比例编码**：得分号旁的短横条长度 = 得分率，颜色按得分率分档，扣分项一眼可见（分组标题不画横条，避免大面积色块抢视线）
@@ -198,29 +224,35 @@ npm run preview
 | 协作部门 | 协作部门意见 |
 | 董事长 | 董事长意见 |
 
-节点圆点按结果着色：已同意 / 自动通过 = 绿，已拒绝 / 已撤销 = 红，已提交 = 灰。
 无数据时保持空态（`暂无转正文档` / `暂无审批记录` / `暂无考核记录`），不显示任何添加入口。
 
-> Excel 的「转正记录」sheet 与页面保持一致：上半部分审批详情，中半部分审批记录（同样是竖版时间轴：
+> **Excel 的「转正记录」sheet 与页面保持一致**：上半部分审批详情，中半部分审批记录（同样是竖版时间轴：
 > A 列窄列放 `●` 圆点并用单元格右边框连成竖线，B~F 列依次为 节点名称 / 审批人 / 审批结果 / 审批意见 / 审批时间），
 > 下半部分考核记录 —— 每位考评人一段：考评人 / 角色 / 得分·结论 → 考评时间 / 意见栏（标题随角色切换）→ 出勤情况
 > → 5 列表头（考核项目 / 评价要点 / 项目分值 / 评价标准 / 得分）+ 12 行明细（考核项目按组竖向合并）→ 得分行 → 结论行，
 > 最后是 3 条底部说明。
 > 审批时间与考评时间同样是「相对时间\n绝对时间」两行显示（行高不写死，由 Excel 按换行自动撑开）。
-> Excel 的「得分」列沿用与页面相同的得分率配色（≥90% 绿 / 80~90% 蓝 / <80% 橙），保证两处语义一致。
+> Excel 的「得分」列与「得分 N 分 · 结论」格沿用与页面相同的得分率配色（≥90% 绿 / 80~90% 蓝 / <80% 橙），保证两处语义一致。
 > 详情页「导出档案」与列表页「批量导出」共用 `buildEmployeeExcelBuffer()`，两边同步生效。
 
 ### 敏感字段脱敏
-`maskIdCard`（前 6 + `***********` + 后 4）+ `maskPhone`（前 3 + `****` + 后 4），hover 揭示明文，应用位置：列表手机号、详情身份证 / 联系电话 / 紧急电话 / 家庭成员电话 / 工作经历证明人电话。
+`maskIdCard`（前 6 + `***********` + 后 4）+ `maskPhone`（前 3 + `****` + 后 4），hover 揭示明文。
+应用位置：列表页手机号、详情页身份证 / 联系电话 / 紧急电话 / 家庭成员电话 / 工作经历证明人电话。
+
+### 时间显示
+`relativeTime()`（1 个月前 / 4 年前）与 `formatShortDateTime()`（7月15日 11:07）配套使用，
+页面与 Excel 共用同一套实现，保证两处口径一致。
 
 ## 部署
 
-GitHub Actions 在 `.github/workflows/` 配置：推 `main` → 自动 `npm run build` → 发布到 GitHub Pages `/material-system/` 子路径。
+GitHub Actions 在 `.github/workflows/deploy.yml` 配置：推 `main` → `npm ci` → `npm run build` → 发布到 GitHub Pages。
+构建后额外 `cp dist/index.html dist/404.html` 并 `touch dist/.nojekyll`，保证深层链接和刷新都能回到 SPA。
 
 `vite.config.ts` 已配置：
-- `base: '/material-system/'`（仅 build 模式）
+- `base: '/employee-360-profile/'`（仅 build 模式；本地 dev 用根路径 `/`）
 - 路径别名 `@` → `src/`
 - SCSS 自动注入 `variables.scss` 到每个组件
+- dev server 端口 `3000`，`/api` 代理到 `https://open.oceanengine.com`（预留接口，mock 阶段未使用）
 
 ## 浏览器支持
 
