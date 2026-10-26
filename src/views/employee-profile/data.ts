@@ -30,20 +30,38 @@ export const contractTypeOptions = [
   '兼职合同',
 ]
 
-/** 转正考核人员 */
-export interface RegularizationReviewer {
-  name: string
-  /** 考核评分表附件（对应 employee.attachments 中 category='其他' 的文件 name） */
-  attachment?: string
+/** 转正审批记录（飞书审批同步，只读） */
+export interface RegularizationApproval {
+  /** 节点名称：提交 / 审批 */
+  node: string
+  /** 审批人姓名 */
+  approver: string
+  /** 审批结果：已提交 / 已同意 / 已拒绝 / 自动通过 */
+  result: string
+  /** 审批意见 */
+  comment?: string
+  /** 审批时间（YYYY-MM-DD HH:mm） */
+  time: string
 }
 
-/** 转正记录 */
+/** 转正文档（飞书云文档，只读） */
+export interface RegularizationDoc {
+  /** 文档标题 */
+  name: string
+  /** 预览地址（相对路径，兼容子路径部署） */
+  url: string
+}
+
+/** 转正记录（数据由飞书同步，前端只读） */
 export interface RegularizationRecord {
+  /** 转正日期 */
   date: string
-  /** 转正汇报文档 */
-  report?: string
+  /** 转正文档 */
+  doc?: RegularizationDoc
+  /** 备注 */
   description?: string
-  reviewers: RegularizationReviewer[]
+  /** 审批记录（按时间正序） */
+  approvals: RegularizationApproval[]
 }
 
 export interface SalaryRecord {
@@ -57,8 +75,13 @@ export interface TrainingRecord {
   date: string
   name: string
   type: '内部' | '外部'
+  /** 内部培训的讲师 */
+  lecturer?: string
+  /** 外部培训的机构名称 */
+  institution?: string
   location: string
   duration: number
+  remark?: string
 }
 
 export interface RewardRecord {
@@ -187,6 +210,27 @@ const buildGrowth = (
   description: string
 ): GrowthRecord => ({ type, date, title, description })
 
+/** 转正文档：飞书云文档预览地址（mock 用本地静态页，接入后换成真实飞书文档链接） */
+const MOCK_REGULARIZATION_DOC_URL = './mock/regularization-doc.html'
+
+/** 通用：转正文档模板 */
+const buildRegularizationDoc = (
+  department: string,
+  name: string
+): RegularizationDoc => ({
+  name: `${department}-转正述职文档-${name}`,
+  url: MOCK_REGULARIZATION_DOC_URL,
+})
+
+/** 通用：转正审批记录模板 */
+const buildApproval = (
+  node: string,
+  approver: string,
+  result: string,
+  time: string,
+  comment?: string
+): RegularizationApproval => ({ node, approver, result, time, comment })
+
 export const employees: Employee[] = reactive([
 
   {
@@ -256,11 +300,13 @@ export const employees: Employee[] = reactive([
     regularizations: [
       {
         date: '2022-07-18',
-        report: '转正汇报.pdf',
         description: '试用期满考核转正通过',
-        reviewers: [
-          { name: '李思雨', attachment: '转正评分表-李思雨.pdf' },
-          { name: '陈欣宜', attachment: '转正评分表-陈欣宜.pdf' },
+        doc: buildRegularizationDoc('技术部', '张明远'),
+        approvals: [
+          buildApproval('提交', '张明远', '已提交', '2022-07-15 11:07'),
+          buildApproval('审批', '李思雨', '已同意', '2022-07-15 11:13'),
+          buildApproval('审批', '陈欣宜', '已同意', '2022-07-15 17:53'),
+          buildApproval('审批', '张明远', '自动通过', '2022-07-15 17:56', '之前已通过该审批，无需重复审批'),
         ],
       },
     ],
@@ -273,9 +319,9 @@ export const employees: Employee[] = reactive([
       { effectiveDate: '2023-04-01', amount: '30,000 元/月', change: '+2,000', approver: '李思雨' },
     ],
     trainings: [
-      { date: '2025-09-10', name: '高级前端架构实战', type: '外部', location: '上海·浦东国际会议中心', duration: 24 },
-      { date: '2024-06-12', name: '《产品方法论》', type: '内部', location: '公司总部·3 楼培训室', duration: 8 },
-      { date: '2022-08-10', name: '新员工入职培训', type: '内部', location: '公司总部·1 楼大会议室', duration: 4 },
+      { date: '2025-09-10', name: '高级前端架构实战', type: '外部', institution: '极客时间', location: '上海·浦东国际会议中心', duration: 24, remark: '微前端与前端性能优化实战' },
+      { date: '2024-06-12', name: '《产品方法论》', type: '内部', lecturer: '李思雨（产品部）', location: '公司总部·3 楼培训室', duration: 8, remark: '需求拆解与 PRD 写作规范' },
+      { date: '2022-08-10', name: '新员工入职培训', type: '内部', lecturer: '集团 HR 中心', location: '公司总部·1 楼大会议室', duration: 4 },
     ],
     rewards: [
       { date: '2025-01', level: '公司级', title: '年度优秀员工', reason: '2024 年度业务贡献突出，主导关键系统重构' },
@@ -351,10 +397,12 @@ export const employees: Employee[] = reactive([
     regularizations: [
       {
         date: '2020-12-01',
-        report: '转正汇报.pdf',
         description: '试用期满考核转正通过',
-        reviewers: [
-          { name: '陈欣宜', attachment: '转正评分表-陈欣宜.pdf' },
+        doc: buildRegularizationDoc('产品部', '李思雨'),
+        approvals: [
+          buildApproval('提交', '李思雨', '已提交', '2020-11-28 09:24'),
+          buildApproval('审批', '陈欣宜', '已同意', '2020-11-28 14:02'),
+          buildApproval('审批', '陈秀英', '已同意', '2020-11-30 10:41'),
         ],
       },
     ],
@@ -368,10 +416,10 @@ export const employees: Employee[] = reactive([
       { effectiveDate: '2022-06-01', amount: '28,000 元/月', change: '+3,000', approver: '陈欣宜' },
     ],
     trainings: [
-      { date: '2024-09-20', name: '《高效能团队管理》', type: '外部', location: '杭州·阿里西溪园区', duration: 24 },
-      { date: '2022-05-10', name: '产品经理进阶培训', type: '外部', location: '北京·中关村创业大街', duration: 32 },
-      { date: '2021-03-15', name: '《业务洞察方法论》', type: '内部', location: '公司总部·3 楼培训室', duration: 16 },
-      { date: '2020-09-01', name: '新员工入职培训', type: '内部', location: '公司总部·1 楼大会议室', duration: 4 },
+      { date: '2024-09-20', name: '《高效能团队管理》', type: '外部', institution: '阿里云开发者社区', location: '杭州·阿里西溪园区', duration: 24, remark: '含管理者情境演练' },
+      { date: '2022-05-10', name: '产品经理进阶培训', type: '外部', institution: '产品派', location: '北京·中关村创业大街', duration: 32 },
+      { date: '2021-03-15', name: '《业务洞察方法论》', type: '内部', lecturer: '王建国（战略部）', location: '公司总部·3 楼培训室', duration: 16 },
+      { date: '2020-09-01', name: '新员工入职培训', type: '内部', lecturer: '集团 HR 中心', location: '公司总部·1 楼大会议室', duration: 4 },
     ],
     rewards: [
       { date: '2025-01', level: '公司级', title: '年度卓越贡献奖', reason: '主导增长方向产品，业务指标 +45%' },
@@ -442,8 +490,8 @@ export const employees: Employee[] = reactive([
       { effectiveDate: '2026-08-12', amount: '15,000 元/月（试用期 80%）', change: '—', approver: '李思雨' },
     ],
     trainings: [
-      { date: '2026-08-20', name: '新员工入职培训', type: '内部', location: '公司总部·1 楼大会议室', duration: 4 },
-      { date: '2026-09-05', name: '设计系统入门', type: '内部', location: '线上（腾讯会议）', duration: 8 },
+      { date: '2026-08-20', name: '新员工入职培训', type: '内部', lecturer: '集团 HR 中心', location: '公司总部·1 楼大会议室', duration: 4 },
+      { date: '2026-09-05', name: '设计系统入门', type: '内部', lecturer: '刘子昂（运营部）', location: '线上（腾讯会议）', duration: 8, remark: '组件规范与设计走查流程' },
     ],
     rewards: [],
     attachments: [
@@ -516,10 +564,12 @@ export const employees: Employee[] = reactive([
     regularizations: [
       {
         date: '2019-08-20',
-        report: '转正汇报.pdf',
         description: '试用期满考核转正通过',
-        reviewers: [
-          { name: '王丽', attachment: '转正评分表-王丽.pdf' },
+        doc: buildRegularizationDoc('人力资源部', '陈欣宜'),
+        approvals: [
+          buildApproval('提交', '陈欣宜', '已提交', '2019-08-16 16:30'),
+          buildApproval('审批', '王丽', '已同意', '2019-08-16 18:12'),
+          buildApproval('审批', '张明远', '已同意', '2019-08-19 09:45'),
         ],
       },
     ],
@@ -534,9 +584,9 @@ export const employees: Employee[] = reactive([
       { effectiveDate: '2021-04-01', amount: '22,000 元/月', change: '+3,000', approver: '—' },
     ],
     trainings: [
-      { date: '2024-05-15', name: '《组织发展与人才盘点》', type: '外部', location: '北京·国家会议中心', duration: 24 },
-      { date: '2022-04-20', name: 'HRBP 实战工作坊', type: '外部', location: '上海·徐汇万科中心', duration: 16 },
-      { date: '2019-09-10', name: '《HR 三支柱模型》', type: '内部', location: '公司总部·3 楼培训室', duration: 8 },
+      { date: '2024-05-15', name: '《组织发展与人才盘点》', type: '外部', institution: '北大光华管理学院', location: '北京·国家会议中心', duration: 24, remark: '九宫格人才盘点工作坊' },
+      { date: '2022-04-20', name: 'HRBP 实战工作坊', type: '外部', institution: '盖雅人力', location: '上海·徐汇万科中心', duration: 16 },
+      { date: '2019-09-10', name: '《HR 三支柱模型》', type: '内部', lecturer: '集团 HR 中心', location: '公司总部·3 楼培训室', duration: 8 },
     ],
     rewards: [
       { date: '2024-01', level: '公司级', title: '年度 HR 卓越奖', reason: '组织文化建设贡献突出' },
@@ -610,10 +660,11 @@ export const employees: Employee[] = reactive([
     regularizations: [
       {
         date: '2022-05-14',
-        report: '转正汇报.pdf',
         description: '试用期满考核转正通过',
-        reviewers: [
-          { name: '李思雨', attachment: '转正评分表-李思雨.pdf' },
+        doc: buildRegularizationDoc('运营部', '刘子昂'),
+        approvals: [
+          buildApproval('提交', '刘子昂', '已提交', '2022-05-12 10:05'),
+          buildApproval('审批', '李思雨', '已同意', '2022-05-12 15:38'),
         ],
       },
     ],
@@ -625,8 +676,8 @@ export const employees: Employee[] = reactive([
       { effectiveDate: '2024-04-01', amount: '16,000 元/月', change: '+2,000', approver: '李思雨' },
     ],
     trainings: [
-      { date: '2025-03-15', name: '《活动运营进阶》', type: '外部', location: '广州·天河珠江新城', duration: 16 },
-      { date: '2022-06-01', name: '《用户增长实操》', type: '内部', location: '公司总部·3 楼培训室', duration: 8 },
+      { date: '2025-03-15', name: '《活动运营进阶》', type: '外部', institution: '运营派', location: '广州·天河珠江新城', duration: 16 },
+      { date: '2022-06-01', name: '《用户增长实操》', type: '内部', lecturer: '孙一鸣（市场部）', location: '公司总部·3 楼培训室', duration: 8, remark: 'AARRR 增长模型落地' },
     ],
     rewards: [
       { date: '2024-12', level: '团队级', title: 'Q4 活动之星', reason: '双 11 活动转化率第一' },
@@ -693,10 +744,13 @@ export const employees: Employee[] = reactive([
     regularizations: [
       {
         date: '2024-09-01',
-        report: '转正汇报.pdf',
         description: '试用期满考核转正通过',
-        reviewers: [
-          { name: '张明远', attachment: '转正评分表-张明远.pdf' },
+        doc: buildRegularizationDoc('技术部', '赵雨彤'),
+        approvals: [
+          buildApproval('提交', '赵雨彤', '已提交', '2024-08-29 09:18'),
+          buildApproval('审批', '张明远', '已同意', '2024-08-29 11:47'),
+          buildApproval('审批', '李思雨', '已同意', '2024-08-30 16:20'),
+          buildApproval('审批', '赵雨彤', '自动通过', '2024-08-30 16:22', '之前已通过该审批，无需重复审批'),
         ],
       },
     ],
@@ -707,8 +761,8 @@ export const employees: Employee[] = reactive([
       { effectiveDate: '2025-04-01', amount: '28,000 元/月', change: '+3,000', approver: '张明远' },
     ],
     trainings: [
-      { date: '2025-08-10', name: '《分布式系统实战》', type: '外部', location: '深圳·南山科技园', duration: 24 },
-      { date: '2024-07-15', name: '《服务端架构基础》', type: '内部', location: '公司总部·2 楼技术分享厅', duration: 16 },
+      { date: '2025-08-10', name: '《分布式系统实战》', type: '外部', institution: 'ArchSummit 全球架构师峰会', location: '深圳·南山科技园', duration: 24 },
+      { date: '2024-07-15', name: '《服务端架构基础》', type: '内部', lecturer: '张明远（技术部）', location: '公司总部·2 楼技术分享厅', duration: 16, remark: '服务治理与链路追踪专题' },
     ],
     rewards: [
       { date: '2025-01', level: '部门级', title: '技术新星', reason: '首年技术贡献突出' },
@@ -781,10 +835,12 @@ export const employees: Employee[] = reactive([
     regularizations: [
       {
         date: '2020-07-10',
-        report: '转正汇报.pdf',
         description: '试用期满考核转正通过',
-        reviewers: [
-          { name: '陈欣宜', attachment: '转正评分表-陈欣宜.pdf' },
+        doc: buildRegularizationDoc('市场部', '孙一鸣'),
+        approvals: [
+          buildApproval('提交', '孙一鸣', '已提交', '2020-07-08 14:26'),
+          buildApproval('审批', '陈欣宜', '已同意', '2020-07-08 17:09'),
+          buildApproval('审批', '李思雨', '已同意', '2020-07-09 09:31'),
         ],
       },
     ],
@@ -797,8 +853,8 @@ export const employees: Employee[] = reactive([
       { effectiveDate: '2023-04-01', amount: '24,000 元/月', change: '+4,000', approver: '陈欣宜' },
     ],
     trainings: [
-      { date: '2024-09-10', name: '《整合营销传播》', type: '外部', location: '上海·静安寺', duration: 16 },
-      { date: '2020-08-15', name: '《品牌营销方法论》', type: '内部', location: '公司总部·3 楼培训室', duration: 8 },
+      { date: '2024-09-10', name: '《整合营销传播》', type: '外部', institution: 'IMA 中国', location: '上海·静安寺', duration: 16 },
+      { date: '2020-08-15', name: '《品牌营销方法论》', type: '内部', lecturer: '李思雨（产品部）', location: '公司总部·3 楼培训室', duration: 8 },
     ],
     rewards: [
       { date: '2022-01', level: '公司级', title: '年度品牌贡献奖', reason: '主导品牌升级项目' },
@@ -808,6 +864,199 @@ export const employees: Employee[] = reactive([
       { name: '学历证书.pdf', category: '学历证书', size: '0.8 MB', uploadDate: '2020-04-10', uploader: '周子墨' },
       { name: '劳动合同.pdf', category: '劳动合同', size: '0.5 MB', uploadDate: '2020-04-10', uploader: '陈秀英' },
       { name: '离职证明.pdf', category: '离职证明', size: '0.3 MB', uploadDate: '2026-09-30', uploader: '陈秀英' },
+    ],
+  },
+  {
+    id: 8,
+    employeeNo: 'E10008',
+    name: '欧阳雪',
+    avatar: avatar('ouyangxue'),
+    email: 'ouyangxue@example.com',
+    phone: '138-0008-0008',
+    department: '技术部',
+    position: '前端工程师',
+    status: 'probation',
+    entryDate: '2026-10-08',
+    birthDate: '1999-03-17',
+    gender: '女',
+    nativePlace: '江西 南昌',
+    address: '上海市浦东新区张江高科技园区',
+    reportTo: '张明远',
+    workLocation: '上海',
+    contractType: '劳动合同',
+    contractEnd: '2027-04-07',
+    employeeCategory: '正式员工',
+    idCard: '360102199903171122',
+    ethnicity: '汉族',
+    maritalStatus: '未婚',
+    hukouAddress: '江西省南昌市东湖区阳明路',
+    emergencyContact: '欧阳建民',
+    emergencyPhone: '138-0088-1122',
+    family: [
+      { relation: '父亲', name: '欧阳建民', company: '南昌铁路局', phone: '138-0088-1122' },
+      { relation: '母亲', name: '周美兰', company: '南昌市第一医院', phone: '138-0088-1133' },
+    ],
+    highestEducation: '本科',
+    graduateSchool: '华东师范大学',
+    departmentTenure: '15 天',
+    education: { school: '华东师范大学', major: '软件工程', degree: '本科', period: '2017 - 2021' },
+    career: [
+      { period: '2026.10 - 至今', title: '前端工程师', department: '技术部', description: '试用期 - 参与中后台管理系统开发。' },
+    ],
+    workHistory: [
+      { period: ['2026-10-08', ''], company: '本公司', title: '前端工程师', reference: '张明远', referencePhone: '138-0001-0001', reason: '试用期' },
+    ],
+    educationHistory: [
+      { period: ['2017-09-01', '2021-06-30'], degree: '本科', school: '华东师范大学', major: '软件工程' },
+    ],
+    performance: [
+      { period: '2026 Q4', score: 82, level: 'B+', comment: '试用期首月，需求交付及时，代码质量良好。' },
+    ],
+    growthRecords: [
+      buildGrowth('entry', '2026-10-08', '入职办理', '入职部门：技术部\n入职岗位：前端工程师\n入职状态：试用期'),
+    ],
+    contracts: [
+      { name: '试用期劳动合同（6 个月）', type: '劳动合同', startDate: '2026-10-08', endDate: '2027-04-07', position: '前端工程师', attachments: ['试用期劳动合同.pdf'] },
+    ],
+    salaries: [
+      { effectiveDate: '2026-10-08', amount: '18,000 元/月（试用期 80%）', change: '—', approver: '陈欣宜' },
+    ],
+    trainings: [
+      { date: '2026-10-12', name: '新员工入职培训', type: '内部', lecturer: '集团 HR 中心', location: '公司总部·1 楼大会议室', duration: 4 },
+    ],
+    rewards: [],
+    attachments: [
+      { name: '身份证扫描件.pdf', category: '身份证证件', size: '1.1 MB', uploadDate: '2026-10-08', uploader: '陈秀英' },
+      { name: '毕业证书.pdf', category: '学历证书', size: '0.8 MB', uploadDate: '2026-10-08', uploader: '陈秀英' },
+      { name: '试用期劳动合同.pdf', category: '劳动合同', size: '0.5 MB', uploadDate: '2026-10-08', uploader: '陈秀英' },
+    ],
+  },
+  {
+    id: 9,
+    employeeNo: 'E10009',
+    name: '何雨薇',
+    avatar: avatar('heyuwei'),
+    email: 'heyuwei@example.com',
+    phone: '138-0009-0009',
+    department: '运营部',
+    position: '内容运营专员',
+    status: 'probation',
+    entryDate: '2026-07-20',
+    birthDate: '1997-12-29',
+    gender: '女',
+    nativePlace: '四川 成都',
+    address: '成都市高新区天府三街',
+    reportTo: '李思雨',
+    workLocation: '成都',
+    contractType: '劳动合同',
+    contractEnd: '2027-01-19',
+    employeeCategory: '正式员工',
+    idCard: '510107199712294433',
+    ethnicity: '汉族',
+    maritalStatus: '未婚',
+    hukouAddress: '四川省成都市武侯区人民南路',
+    emergencyContact: '何志强',
+    emergencyPhone: '138-0099-2233',
+    family: [
+      { relation: '父亲', name: '何志强', company: '成都地铁集团', phone: '138-0099-2233' },
+    ],
+    highestEducation: '本科',
+    graduateSchool: '西南财经大学',
+    departmentTenure: '3 个月',
+    education: { school: '西南财经大学', major: '市场营销', degree: '本科', period: '2015 - 2019' },
+    career: [
+      { period: '2026.07 - 至今', title: '内容运营专员', department: '运营部', description: '试用期 - 负责品牌号内容策划与数据复盘。' },
+    ],
+    workHistory: [
+      { period: ['2026-07-20', ''], company: '本公司', title: '内容运营专员', reference: '李思雨', referencePhone: '138-0002-0002', reason: '试用期' },
+    ],
+    educationHistory: [
+      { period: ['2015-09-01', '2019-06-30'], degree: '本科', school: '西南财经大学', major: '市场营销' },
+    ],
+    performance: [
+      { period: '2026 Q3', score: 85, level: 'B+', comment: '试用期期间内容产出稳定，互动率环比提升。' },
+    ],
+    growthRecords: [
+      buildGrowth('entry', '2026-07-20', '入职办理', '入职部门：运营部\n入职岗位：内容运营专员\n入职状态：试用期'),
+      buildGrowth('performance', '2026-09-30', '试用期评估', '2026 Q3 绩效：B+ 级，85 分'),
+    ],
+    contracts: [
+      { name: '试用期劳动合同（6 个月）', type: '劳动合同', startDate: '2026-07-20', endDate: '2027-01-19', position: '内容运营专员', attachments: ['试用期劳动合同.pdf'] },
+    ],
+    salaries: [
+      { effectiveDate: '2026-07-20', amount: '12,000 元/月（试用期 80%）', change: '—', approver: '陈欣宜' },
+    ],
+    trainings: [
+      { date: '2026-08-05', name: '《用户增长实操》', type: '内部', lecturer: '孙一鸣（市场部）', location: '公司总部·3 楼培训室', duration: 8, remark: '增长模型与渠道投放基础' },
+    ],
+    rewards: [],
+    attachments: [
+      { name: '身份证扫描件.pdf', category: '身份证证件', size: '1.1 MB', uploadDate: '2026-07-20', uploader: '陈秀英' },
+      { name: '试用期劳动合同.pdf', category: '劳动合同', size: '0.5 MB', uploadDate: '2026-07-20', uploader: '陈秀英' },
+    ],
+  },
+  {
+    id: 10,
+    employeeNo: 'E10010',
+    name: '顾思彤',
+    avatar: avatar('gusitong'),
+    email: 'gusitong@example.com',
+    phone: '138-0010-0010',
+    department: '产品部',
+    position: '产品助理',
+    status: 'probation',
+    entryDate: '2026-09-01',
+    birthDate: '2003-06-11',
+    gender: '女',
+    nativePlace: '湖南 长沙',
+    address: '深圳市南山区粤海街道',
+    reportTo: '李思雨',
+    workLocation: '深圳',
+    contractType: '实习协议',
+    contractEnd: '2027-02-28',
+    employeeCategory: '实习生员工',
+    idCard: '430103200306112266',
+    ethnicity: '汉族',
+    maritalStatus: '未婚',
+    hukouAddress: '湖南省长沙市岳麓区麓山南路',
+    emergencyContact: '顾海涛',
+    emergencyPhone: '138-0010-3344',
+    family: [
+      { relation: '父亲', name: '顾海涛', company: '长沙市轨道交通集团', phone: '138-0010-3344' },
+    ],
+    highestEducation: '大专',
+    graduateSchool: '湖南财政经济学院',
+    departmentTenure: '2 个月',
+    education: { school: '湖南财政经济学院', major: '电子商务', degree: '大专', period: '2022 - 2025' },
+    career: [
+      { period: '2026.09 - 至今', title: '产品助理', department: '产品部', description: '实习期 - 协助需求梳理与竞品分析。' },
+    ],
+    workHistory: [
+      { period: ['2026-09-01', ''], company: '本公司', title: '产品助理', reference: '李思雨', referencePhone: '138-0002-0002', reason: '实习期' },
+    ],
+    educationHistory: [
+      { period: ['2022-09-01', '2025-06-30'], degree: '大专', school: '湖南财政经济学院', major: '电子商务' },
+    ],
+    performance: [
+      { period: '2026 Q3', score: 78, level: 'B', comment: '实习期表现符合预期，文档产出及时。' },
+    ],
+    growthRecords: [
+      buildGrowth('entry', '2026-09-01', '入职办理', '入职部门：产品部\n入职岗位：产品助理\n入职状态：实习期'),
+      buildGrowth('training', '2026-09-10', '入职培训', '新员工入职培训，培训时长 8 学时'),
+    ],
+    contracts: [
+      { name: '实习协议（6 个月）', type: '实习协议', startDate: '2026-09-01', endDate: '2027-02-28', position: '产品助理', attachments: ['实习协议.pdf'] },
+    ],
+    salaries: [
+      { effectiveDate: '2026-09-01', amount: '4,500 元/月（实习补贴）', change: '—', approver: '李思雨' },
+    ],
+    trainings: [
+      { date: '2026-09-10', name: '新员工入职培训', type: '内部', lecturer: '集团 HR 中心', location: '线上（腾讯会议）', duration: 8 },
+    ],
+    rewards: [],
+    attachments: [
+      { name: '身份证扫描件.pdf', category: '身份证证件', size: '1.0 MB', uploadDate: '2026-09-01', uploader: '陈秀英' },
+      { name: '实习协议.pdf', category: '劳动合同', size: '0.4 MB', uploadDate: '2026-09-01', uploader: '陈秀英' },
     ],
   },
 ])

@@ -25,7 +25,16 @@
           icon="clock-circle"
           theme="warning"
           label="试用期"
-          :value="stats.probation"
+          :value="stats.probation - stats.internProbation"
+          unit="人"
+        />
+      </a-col>
+      <a-col :flex="1">
+        <StatCard
+          icon="history"
+          theme="cyan"
+          label="实习期"
+          :value="stats.internProbation"
           unit="人"
         />
       </a-col>
@@ -221,7 +230,7 @@
         </template>
         <template #status="{ record }">
           <a-tag :color="statusColor(record.status)" size="small">
-            {{ statusText(record.status) }}
+            {{ statusText(record.status, record.employeeCategory) }}
           </a-tag>
         </template>
         <template #departureDate="{ record }">
@@ -741,7 +750,7 @@ import {
   attachmentCategoryOptions,
   type AttachmentCategory,
 } from './data'
-import { maskPhone } from '@/utils/format'
+import { employeeStatusText, maskPhone } from '@/utils/format'
 import { downloadBatchExport } from '@/utils/batchExport'
 
 const departments = [
@@ -779,6 +788,7 @@ const stats = computed(() => {
   const total = list.length
   const active = list.filter(e => e.status === 'active').length
   const probation = list.filter(e => e.status === 'probation').length
+  const internProbation = list.filter(e => e.status === 'probation' && e.employeeCategory === '实习生员工').length
   const leave = list.filter(e => e.status === 'leave').length
   const resigned = list.filter(e => e.status === 'resigned').length
   const newThisMonth = list.filter(e => {
@@ -786,7 +796,7 @@ const stats = computed(() => {
     const now = new Date()
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
   }).length
-  return { total, active, probation, leave, resigned, newThisMonth, resignedThisMonth: resigned }
+  return { total, active, probation, internProbation, leave, resigned, newThisMonth, resignedThisMonth: resigned }
 })
 
 const filters = reactive({
@@ -797,14 +807,15 @@ const filters = reactive({
   departureDateRange: undefined as string[] | undefined,
 })
 
-type QuickFilterValue = 'all' | 'active' | 'probation' | 'leave' | 'resigned'
+type QuickFilterValue = 'all' | 'active' | 'probation' | 'intern' | 'leave' | 'resigned'
 
 const quickFilter = ref<QuickFilterValue>('all')
 
 const quickFilters = computed(() => [
   { value: 'all' as QuickFilterValue, label: '全部', count: stats.value.total },
-  { value: 'active' as QuickFilterValue, label: '在职', count: stats.value.active },
-  { value: 'probation' as QuickFilterValue, label: '试用期', count: stats.value.probation },
+  { value: 'active' as QuickFilterValue, label: '在职', count: stats.value.active + stats.value.probation },
+  { value: 'probation' as QuickFilterValue, label: '试用期', count: stats.value.probation - stats.value.internProbation },
+  { value: 'intern' as QuickFilterValue, label: '实习期', count: stats.value.internProbation },
   { value: 'resigned' as QuickFilterValue, label: '离职', count: stats.value.resigned },
 ])
 
@@ -823,7 +834,22 @@ const workLocationFilters = computed(() => [
 
 const filteredList = computed(() => {
   return list.filter(e => {
-    if (quickFilter.value !== 'all' && e.status !== quickFilter.value) return false
+    if (quickFilter.value !== 'all') {
+      const intern = e.employeeCategory === '实习生员工'
+      let hit: boolean
+      if (quickFilter.value === 'active') {
+        // 「在职」口径 = 已转正 + 试用期/实习期（未离职的都算在职）
+        hit = e.status === 'active' || e.status === 'probation'
+      } else if (quickFilter.value === 'intern') {
+        // 「实习期」只取实习生的 probation；其余 probation 走「试用期」
+        hit = e.status === 'probation' && intern
+      } else if (quickFilter.value === 'probation') {
+        hit = e.status === 'probation' && !intern
+      } else {
+        hit = e.status === quickFilter.value
+      }
+      if (!hit) return false
+    }
     if (workLocationFilter.value !== 'all' && e.workLocation !== workLocationFilter.value) return false
     if (filters.keyword) {
       const kw = filters.keyword.toLowerCase()
@@ -1031,7 +1057,7 @@ const confirmBatchExport = async () => {
     })
     loadingMsg.close()
     Message.success(
-      `已导出 ${selectedRowKeys.value.length} 位员工档案，共 ${result.fileCount} 份文件（${result.zipName}）`,
+      `已导出 ${selectedRowKeys.value.length} 位员工档案，共 ${result.fileCount} 份文件（含 ${result.excelCount} 份 Excel）（${result.zipName}）`,
     )
   } catch (err) {
     loadingMsg.close()
@@ -1138,9 +1164,8 @@ const handleReset = () => {
   workLocationFilter.value = 'all'
 }
 
-const statusText = (s: Employee['status']) => {
-  return { active: '在职', probation: '试用期', leave: '休假', resigned: '离职' }[s]
-}
+const statusText = (s: Employee['status'], category?: string) =>
+  employeeStatusText(s, category)
 const statusColor = (s: Employee['status']) => {
   return { active: 'green', probation: 'orange', leave: 'gray', resigned: 'red' }[s]
 }

@@ -1,5 +1,6 @@
 import JSZip from 'jszip'
 import type { Employee, AttachmentCategory } from '@/views/employee-profile/data'
+import { employeeStatusText } from '@/utils/format'
 
 interface ExportInput {
   /** 已勾选的员工（已按列表顺序） */
@@ -13,6 +14,8 @@ interface ExportInput {
 interface ExportResult {
   /** 生成的 zip 内文件总数（不含文件夹） */
   fileCount: number
+  /** 生成的 Excel 档案份数（每位员工一份） */
+  excelCount: number
   /** 触发下载的 zip 文件名 */
   zipName: string
 }
@@ -44,7 +47,7 @@ const buildFileContent = (employee: Employee, category: AttachmentCategory): str
     `部    门：${employee.department}`,
     `岗    位：${employee.position}`,
     `员工类别：${employee.employeeCategory}`,
-    `在职状态：${{ active: '在职', probation: '试用期', leave: '休假', resigned: '离职' }[employee.status]}`,
+    `在职状态：${employeeStatusText(employee.status, employee.employeeCategory)}`,
     `文件分类：${category}`,
     `导出时间：${now.toLocaleString('zh-CN')}`,
     '',
@@ -77,23 +80,34 @@ const triggerDownload = (blob: Blob, filename: string) => {
 /**
  * 批量导出员工档案为 zip
  * - 每个员工 = 一个以「员工姓名」命名的文件夹
- * - 文件夹内 = 该员工最终勾选的导出项对应的 .txt 模拟文件
- * - 自动跳过「最终导出项为空」的员工
+ * - 文件夹内 = 1 份 9 sheet 的 Excel 档案 + 该员工最终勾选的导出项对应的 .txt 模拟文件
+ * - 导出项为空的员工仍会导出（至少含 Excel 档案），保证档案不缺失
  */
 export const downloadBatchExport = async (input: ExportInput): Promise<ExportResult> => {
+  // 动态引入：exceljs 体积较大（~1MB），只在真正导出时才加载，不进列表页首屏包
+  const { buildEmployeeExcelBuffer } = await import('@/utils/profileExport')
+
   const zip = new JSZip()
   let fileCount = 0
+  let excelCount = 0
   let employeeCount = 0
 
   for (const emp of input.employees) {
     // 微调优先；未自定义的员工 fallback 到统一配置
     const categories = input.employeeSelections[emp.id] ?? input.unifiedCategories
-    if (!categories.length) continue
 
-    const folder = zip.folder(sanitizeName(emp.name))
+    const safeName = sanitizeName(emp.name)
+    const folder = zip.folder(safeName)
     if (!folder) continue
 
     employeeCount++
+
+    // 每位员工都附带一份 9 sheet 的 Excel 档案（与详情页「导出档案」内容一致）
+    const excelBuffer = await buildEmployeeExcelBuffer(emp)
+    folder.file(`员工档案_${safeName}.xlsx`, excelBuffer)
+    fileCount++
+    excelCount++
+
     for (const cat of categories) {
       folder.file(buildFileName(emp, cat), buildFileContent(emp, cat))
       fileCount++
@@ -112,5 +126,5 @@ export const downloadBatchExport = async (input: ExportInput): Promise<ExportRes
 
   triggerDownload(blob, zipName)
 
-  return { fileCount, zipName }
+  return { fileCount, excelCount, zipName }
 }

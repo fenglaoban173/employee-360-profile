@@ -28,7 +28,7 @@
           <div class="profile-name-row">
             <span class="profile-name">{{ employee.name }}</span>
             <a-tag :color="statusColor(employee.status)" size="medium" class="profile-status">
-              {{ statusText(employee.status) }}
+              {{ statusText(employee.status, employee.employeeCategory) }}
             </a-tag>
           </div>
           <div class="profile-meta">
@@ -58,7 +58,7 @@
             <a-col :span="12"><info-cell label="合同类型" :value="employee.contractType" /></a-col>
             <a-col :span="12"><info-cell label="合同到期" :value="employee.contractEnd" /></a-col>
             <a-col :span="12"><info-cell label="员工类别" :value="employee.employeeCategory" /></a-col>
-            <a-col :span="12"><info-cell label="在职状态" :value="statusText(employee.status)" /></a-col>
+            <a-col :span="12"><info-cell label="在职状态" :value="statusText(employee.status, employee.employeeCategory)" /></a-col>
           </a-row>
         </a-col>
       </a-row>
@@ -146,7 +146,7 @@
                   <div class="section-title">在职信息</div>
                   <a-row :gutter="[16, 14]">
                     <a-col :span="24"><info-cell label="员工编号" :value="employee.employeeNo" /></a-col>
-                    <a-col :span="24"><info-cell label="在职状态" :value="statusText(employee.status)" /></a-col>
+                    <a-col :span="24"><info-cell label="在职状态" :value="statusText(employee.status, employee.employeeCategory)" /></a-col>
                     <a-col :span="24"><info-cell label="司龄" :value="companyTenure" /></a-col>
                     <a-col :span="24"><info-cell label="员工类别" :value="employee.employeeCategory" /></a-col>
                     <a-col :span="24"><info-cell label="合同类型" :value="employee.contractType" /></a-col>
@@ -443,247 +443,109 @@
         <!-- 转正记录 -->
         <a-tab-pane key="regularization" title="转正记录">
           <div class="tab-pane-content">
-            <!-- 已有转正记录：垂直审批流样式 -->
-            <div v-if="regularizationRecord" class="regularization-card">
-              <div class="regularization-head">
-                <div class="regularization-meta">
-                  <div class="meta-row">
-                    <span class="meta-label">转正日期</span>
-                    <span class="meta-value">{{ regularizationRecord.date }}</span>
-                  </div>
-                  <div v-if="regularizationRecord.description" class="meta-row">
-                    <span class="meta-label">备注</span>
-                    <span class="meta-value">{{ regularizationRecord.description }}</span>
-                  </div>
+            <!-- 审批详情 -->
+            <div class="regularization-block">
+              <div class="section-title">审批详情</div>
+              <div class="approval-detail-grid">
+                <div class="approval-detail-label">部门</div>
+                <div class="approval-detail-value">
+                  <span class="dept-badge">
+                    <icon-user-group />
+                    {{ employee.department }}
+                  </span>
                 </div>
-                <span class="row-actions">
-                  <a-button type="text" size="small" @click="openEditRegularization">
-                    <template #icon><icon-edit /></template>
-                    编辑
-                  </a-button>
-                  <a-button
-                    type="text"
-                    status="danger"
-                    size="small"
-                    @click="requestDeleteConfirm('删除转正记录', '确定要删除这条转正记录吗？', () => deleteRegularization())"
-                  >
-                    <template #icon><icon-delete /></template>
-                    删除
-                  </a-button>
-                </span>
-              </div>
-
-              <!-- 垂直审批流 -->
-              <div class="approval-flow">
-                <!-- Step 1: 转正申请 -->
-                <div class="approval-step">
-                  <div class="approval-dot" />
-                  <div class="approval-content">
-                    <div class="approval-title">转正申请</div>
-                    <div class="approval-desc">
-                      <div><span class="approval-key">转正日期：</span>{{ regularizationRecord.date }}</div>
-                      <div v-if="regularizationRecord.description">
-                        <span class="approval-key">备注：</span>{{ regularizationRecord.description }}
+                <div class="approval-detail-label">入职时间</div>
+                <div class="approval-detail-value">{{ employee.entryDate }}</div>
+                <div class="approval-detail-label">转正日期</div>
+                <div class="approval-detail-value">
+                  {{ regularizationRecord?.date || '—' }}
+                </div>
+                <div class="approval-detail-label">转正文档</div>
+                <div class="approval-detail-value">
+                  <!-- 转正文档：飞书云文档，iframe 内嵌预览 -->
+                  <div v-if="regularizationDoc" class="doc-preview">
+                    <div class="doc-toolbar">
+                      <span class="doc-title">
+                        <icon-file />
+                        {{ regularizationDoc.name }}
+                      </span>
+                      <span class="doc-tools">
+                        <a-button
+                          type="text"
+                          size="mini"
+                          title="在新标签页打开"
+                          @click="openRegularizationDoc"
+                        >
+                          <template #icon><icon-attachment /></template>
+                        </a-button>
+                        <span
+                          class="doc-toggle"
+                          :title="docExpanded ? '收起文档' : '展开文档'"
+                          @click="docExpanded = !docExpanded"
+                        >
+                          <icon-up v-if="docExpanded" />
+                          <icon-down v-else />
+                        </span>
+                      </span>
+                    </div>
+                    <div v-show="docExpanded" class="doc-body">
+                      <div v-if="docLoading" class="doc-loading">
+                        <a-spin :size="30" />
+                        <span>加载中...</span>
                       </div>
+                      <iframe
+                        v-show="!docLoading"
+                        :key="regularizationDoc.name"
+                        :src="regularizationDoc.url"
+                        class="doc-frame"
+                        title="转正文档预览"
+                        @load="docLoading = false"
+                      />
                     </div>
                   </div>
+                  <span v-else class="muted-text">暂无转正文档</span>
                 </div>
+              </div>
+            </div>
 
-                <!-- Step 2: 转正汇报文档 -->
-                <div class="approval-step">
-                  <div class="approval-dot" />
-                  <div class="approval-content">
-                    <div class="approval-title">转正汇报文档</div>
-                    <a-tag
-                      v-if="regularizationRecord.report"
-                      color="arcoblue"
-                      class="contract-attachment-tag"
-                      @click="downloadAttachment(regularizationRecord.report)"
-                    >
-                      <template #icon><icon-file /></template>
-                      {{ regularizationRecord.report }}
-                    </a-tag>
-                    <span v-else class="muted-text">尚未上传</span>
+            <!-- 审批记录 -->
+            <div class="regularization-block">
+              <div class="section-title">审批记录</div>
+              <div v-if="approvalRecords.length" class="approval-timeline">
+                <div
+                  v-for="rec in approvalRecords"
+                  :key="rec.key"
+                  class="approval-timeline-item"
+                  :class="`is-${approvalResultTone(rec.result)}`"
+                >
+                  <div class="approval-timeline-rail">
+                    <span class="approval-timeline-dot" />
                   </div>
-                </div>
-
-                <!-- Step 3: 考核人员评分 -->
-                <div class="approval-step approval-step-last">
-                  <div class="approval-dot" />
-                  <div class="approval-content">
-                    <div class="approval-title">
-                      考核人员评分（{{ regularizationRecord.reviewers.length }} 人）
-                    </div>
-                    <a-empty
-                      v-if="!regularizationRecord.reviewers.length"
-                      description="暂无考核人员"
-                    />
-                    <div v-else class="approval-reviewers">
-                      <div
-                        v-for="(reviewer, idx) in regularizationRecord.reviewers"
-                        :key="idx"
-                        class="approval-reviewer"
-                      >
-                        <a-avatar :size="32" class="reviewer-avatar">
-                          <img :src="avatarFor(reviewer.name)" :alt="reviewer.name" />
+                  <div class="approval-timeline-content">
+                    <div class="approval-timeline-head">
+                      <div class="approval-timeline-person">
+                        <span class="approval-node-label">{{ rec.node }}</span>
+                        <a-avatar :size="24" class="approval-avatar">
+                          <img :src="avatarFor(rec.approver)" :alt="rec.approver" />
                         </a-avatar>
-                        <span class="reviewer-name">{{ reviewer.name }}</span>
-                        <a-tag
-                          v-if="reviewer.attachment"
-                          color="arcoblue"
-                          size="small"
-                          class="contract-attachment-tag reviewer-attachment"
-                          @click="downloadAttachment(reviewer.attachment)"
-                        >
-                          <template #icon><icon-file /></template>
-                          {{ reviewer.attachment }}
+                        <span class="approval-person-name">{{ rec.approver }}</span>
+                        <a-tag :color="approvalResultColor(rec.result)" size="small">
+                          {{ rec.result }}
                         </a-tag>
-                        <span v-else class="muted-text reviewer-attachment">未上传评分表</span>
                       </div>
+                      <div class="approval-time">
+                        <span class="approval-time-rel">{{ relativeTime(rec.time) }}</span>
+                        <span class="approval-time-abs">{{ formatShortDateTime(rec.time) }}</span>
+                      </div>
+                    </div>
+                    <div v-if="rec.comment" class="approval-timeline-comment">
+                      {{ rec.comment }}
                     </div>
                   </div>
                 </div>
               </div>
+              <a-empty v-else description="暂无审批记录" />
             </div>
-
-            <!-- 没有转正记录：空状态 + 添加按钮 -->
-            <div v-else class="regularization-empty">
-              <a-empty description="暂无转正记录" />
-              <a-button type="primary" @click="openAddRegularization">
-                <template #icon><icon-plus /></template>
-                添加转正记录
-              </a-button>
-            </div>
-
-            <!-- 转正记录编辑抽屉 -->
-            <a-drawer
-              v-model:visible="regularizationDrawerVisible"
-              :title="regularizationDrawerTitle"
-              placement="right"
-              :width="780"
-              :ok-text="'保存'"
-              :cancel-text="'取消'"
-              :mask-closable="false"
-              @ok="handleSaveRegularization"
-              @cancel="handleCancelRegularization"
-            >
-              <a-form :model="regularizationForm" layout="vertical">
-                <a-form-item label="转正日期" required>
-                  <a-date-picker v-model="regularizationForm.date" style="width: 100%" />
-                </a-form-item>
-                <a-form-item label="备注">
-                  <a-input
-                    v-model="regularizationForm.description"
-                    placeholder="如：试用期满考核转正通过"
-                    allow-clear
-                  />
-                </a-form-item>
-                <a-form-item label="转正汇报文档">
-                  <a-upload
-                    :auto-upload="false"
-                    :show-file-list="false"
-                    accept="application/pdf,image/*"
-                    @change="handleRegularizationFileUpload"
-                    @before-upload="handleBeforeUpload"
-                  >
-                    <a-button>
-                      <template #icon><icon-upload /></template>
-                      上传汇报文档
-                    </a-button>
-                  </a-upload>
-                  <div v-if="regularizationForm.report" class="report-upload-preview">
-                    <a-tag
-                      color="arcoblue"
-                      class="contract-attachment-tag"
-                      closable
-                      @click="downloadAttachment(regularizationForm.report)"
-                      @close="regularizationForm.report = ''"
-                    >
-                      <template #icon><icon-file /></template>
-                      {{ regularizationForm.report }}
-                    </a-tag>
-                  </div>
-                  <div v-else class="muted-text" style="margin-top: 8px;">尚未上传</div>
-                </a-form-item>
-
-                <!-- 抽屉内考核人员管理（添加转正记录时即可一并录入多个） -->
-                <a-form-item label="考核人员">
-                  <div class="reviewer-section">
-                    <a-button
-                      type="primary"
-                      size="small"
-                      class="reviewer-add-btn"
-                      @click="addNewReviewerRow"
-                    >
-                      <template #icon><icon-plus /></template>
-                      添加考核人员
-                    </a-button>
-                    <div
-                      v-for="(reviewer, idx) in regularizationForm.reviewers"
-                      :key="idx"
-                      class="reviewer-row"
-                    >
-                      <div class="reviewer-field">
-                        <span class="reviewer-field-label">姓名</span>
-                        <div class="reviewer-name-wrap">
-                          <a-select
-                            v-model="regularizationForm.reviewers[idx].name"
-                            placeholder="请选择或输入姓名"
-                            allow-clear
-                            allow-search
-                            filterable
-                          >
-                            <a-option
-                              v-for="opt in reviewerNameOptions"
-                              :key="opt"
-                              :value="opt"
-                            >
-                              {{ opt }}
-                            </a-option>
-                          </a-select>
-                        </div>
-                      </div>
-                      <div class="reviewer-field reviewer-field-attachment">
-                        <span class="reviewer-field-label">评分表附件</span>
-                        <a-upload
-                          :auto-upload="false"
-                          :show-file-list="false"
-                          accept="application/pdf,image/*"
-                          @change="(fileItem) => handleRowReviewerFileChange(fileItem, idx)"
-                          @before-upload="handleBeforeUpload"
-                        >
-                          <a-button size="small">
-                            <template #icon><icon-upload /></template>
-                            {{ reviewer.attachment ? '更换' : '上传' }}
-                          </a-button>
-                        </a-upload>
-                        <a-tag
-                          v-if="reviewer.attachment"
-                          size="small"
-                          color="arcoblue"
-                          class="contract-attachment-tag reviewer-file-tag"
-                          closable
-                          @click="downloadAttachment(reviewer.attachment)"
-                          @close="reviewer.attachment = ''"
-                        >
-                          <template #icon><icon-file /></template>
-                          {{ reviewer.attachment }}
-                        </a-tag>
-                      </div>
-                      <a-button
-                        type="text"
-                        status="danger"
-                        size="small"
-                        class="reviewer-delete-btn"
-                        @click="requestDeleteConfirm('删除考核人员', `确定删除「${reviewer.name || ''}」吗？`, () => removeFormReviewer(idx))"
-                      >
-                        删除
-                      </a-button>
-                    </div>
-                  </div>
-                </a-form-item>
-              </a-form>
-            </a-drawer>
           </div>
         </a-tab-pane>
 
@@ -713,6 +575,12 @@
                     </a-tag>
                   </template>
                 </a-table-column>
+                <a-table-column title="培训方" :width="150">
+                  <template #cell="{ record }">
+                    <span v-if="trainingParty(record)">{{ trainingParty(record) }}</span>
+                    <span v-else class="muted-text">—</span>
+                  </template>
+                </a-table-column>
                 <a-table-column title="培训时长" data-index="duration" :width="110">
                   <template #cell="{ record }">
                     <span v-if="record.duration">{{ record.duration }} 小时</span>
@@ -722,6 +590,12 @@
                 <a-table-column title="培训地点" data-index="location">
                   <template #cell="{ record }">
                     <span v-if="record.location">{{ record.location }}</span>
+                    <span v-else class="muted-text">—</span>
+                  </template>
+                </a-table-column>
+                <a-table-column title="备注" data-index="remark">
+                  <template #cell="{ record }">
+                    <span v-if="record.remark">{{ record.remark }}</span>
                     <span v-else class="muted-text">—</span>
                   </template>
                 </a-table-column>
@@ -772,6 +646,12 @@
                     <a-radio value="外部">外部</a-radio>
                   </a-radio-group>
                 </a-form-item>
+                <a-form-item v-if="trainingForm.type === '内部'" label="培训讲师">
+                  <a-input v-model="trainingForm.lecturer" placeholder="如：李思雨（产品部）" allow-clear />
+                </a-form-item>
+                <a-form-item v-else label="培训机构">
+                  <a-input v-model="trainingForm.institution" placeholder="如：极客时间 / 阿里云开发者社区" allow-clear />
+                </a-form-item>
                 <a-form-item label="培训时长" required>
                   <a-input-number
                     v-model="trainingForm.duration"
@@ -788,6 +668,14 @@
                 </a-form-item>
                 <a-form-item label="培训地点">
                   <a-input v-model="trainingForm.location" placeholder="如：公司总部·3 楼培训室 / 线上（腾讯会议）" allow-clear />
+                </a-form-item>
+                <a-form-item label="备注">
+                  <a-textarea
+                    v-model="trainingForm.remark"
+                    placeholder="如：培训内容、考核结果、收获等"
+                    :auto-size="{ minRows: 3, maxRows: 6 }"
+                    allow-clear
+                  />
                 </a-form-item>
               </a-form>
             </a-drawer>
@@ -1042,7 +930,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, defineComponent, ref, reactive } from 'vue'
+import { computed, h, defineComponent, ref, reactive, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   employees as employeesSource,
@@ -1053,7 +941,7 @@ import {
   type Attachment,
   type AttachmentCategory,
   type RegularizationRecord,
-  type RegularizationReviewer,
+  type RegularizationDoc,
   contractTypeOptions,
   attachmentCategoryOptions,
 } from './data'
@@ -1069,20 +957,22 @@ import {
   IconUpload,
   IconUserGroup,
   IconEye,
+  IconAttachment,
+  IconUp,
+  IconDown,
 } from '@arco-design/web-vue/es/icon'
-import { Message, Modal } from '@arco-design/web-vue'
-import { maskIdCard, maskPhone } from '@/utils/format'
+import { Message } from '@arco-design/web-vue'
+import {
+  employeeStatusText,
+  maskIdCard,
+  maskPhone,
+  relativeTime,
+  formatShortDateTime,
+} from '@/utils/format'
 import { downloadEmployeeProfile } from '@/utils/profileExport'
 
 const route = useRoute()
 const router = useRouter()
-
-/** 考核人员可选名单（mock） */
-const reviewerNameOptions = [
-  '张明远', '张建国', '陈秀英', '李思雨', '陈欣宜',
-  '李宇轩', '陈思远', '王丽', '赵文博', '刘子涵',
-  '黄子韬', '周子墨', '吴梓涵', '徐若曦', '孙佳宁',
-]
 
 /** 响应式员工列表：直接复用 data.ts 里的 reactive 数组（list 页面也是这个引用） */
 const employees = employeesSource
@@ -1110,8 +1000,8 @@ const companyTenure = computed(() => {
   return `${years} 年 ${m} 个月`
 })
 
-const statusText = (s: Employee['status']) =>
-  ({ active: '在职', probation: '试用期', leave: '休假', resigned: '离职' }[s])
+const statusText = (s: Employee['status'], category?: string) =>
+  employeeStatusText(s, category)
 const statusColor = (s: Employee['status']) =>
   ({ active: 'green', probation: 'orange', leave: 'gray', resigned: 'red' }[s])
 
@@ -1283,9 +1173,16 @@ const defaultTrainingForm = (): TrainingRecord => ({
   name: '',
   date: '',
   type: '内部',
+  lecturer: '',
+  institution: '',
   location: '',
   duration: 0,
+  remark: '',
 })
+
+/** 培训方：内部取讲师，外部取机构名称 */
+const trainingParty = (t: TrainingRecord) =>
+  t.type === '内部' ? t.lecturer : t.institution
 
 const trainingForm = reactive<TrainingRecord>(defaultTrainingForm())
 const isEditTrainingMode = computed(() => editingTrainingIndex.value !== null)
@@ -1303,8 +1200,11 @@ const openEditTraining = (record: TrainingRecord, index: number) => {
   trainingForm.name = record.name
   trainingForm.date = record.date
   trainingForm.type = record.type
+  trainingForm.lecturer = record.lecturer ?? ''
+  trainingForm.institution = record.institution ?? ''
   trainingForm.location = record.location
   trainingForm.duration = record.duration
+  trainingForm.remark = record.remark ?? ''
   editingTrainingIndex.value = index
   trainingModalVisible.value = true
 }
@@ -1326,8 +1226,12 @@ const handleSaveTraining = () => {
     name: trainingForm.name,
     date: trainingForm.date,
     type: trainingForm.type,
+    // 培训方按类型二选一，切换类型后旧的那项清空
+    lecturer: trainingForm.type === '内部' ? trainingForm.lecturer ?? '' : '',
+    institution: trainingForm.type === '外部' ? trainingForm.institution ?? '' : '',
     location: trainingForm.location,
     duration: trainingForm.duration,
+    remark: trainingForm.remark ?? '',
   }
 
   if (editingTrainingIndex.value !== null) {
@@ -1641,121 +1545,60 @@ const handleDeleteConfirmCancel = () => {
   pendingDeleteAction = null
 }
 
-/** 当前员工的转正记录（通常 0 或 1 条） */
+/** 当前员工的转正记录（通常 0 或 1 条，数据由飞书同步） */
 const regularizationRecord = computed<RegularizationRecord | null>(() => {
   if (!employee.value) return null
   return employee.value.regularizations?.[0] || null
 })
 
+/** 转正文档（飞书云文档） */
+const regularizationDoc = computed<RegularizationDoc | null>(
+  () => regularizationRecord.value?.doc || null
+)
+
+/** 审批记录（补 key 供表格行标识） */
+const approvalRecords = computed(() =>
+  (regularizationRecord.value?.approvals || []).map((a, idx) => ({
+    ...a,
+    key: `${idx}-${a.time}-${a.approver}`,
+  }))
+)
+
+/** 审批结果标签配色 */
+const approvalResultColor = (result: string) => {
+  if (result === '已同意' || result === '自动通过') return 'green'
+  if (result === '已拒绝' || result === '已撤销') return 'red'
+  if (result === '已提交') return 'gray'
+  return 'arcoblue'
+}
+
+/** 时间轴节点配色（对应 is-success / is-error / is-pending / is-default） */
+const approvalResultTone = (result: string) => {
+  if (result === '已同意' || result === '自动通过') return 'success'
+  if (result === '已拒绝' || result === '已撤销') return 'error'
+  if (result === '已提交') return 'pending'
+  return 'default'
+}
+
+/** 转正文档预览：展开 / 收起 + 加载态 */
+const docExpanded = ref(true)
+const docLoading = ref(true)
+
+/** 切换员工时重置加载态（iframe 按文档名重新挂载） */
+watch(regularizationDoc, () => {
+  docLoading.value = true
+})
+
+/** 在新标签页打开转正文档 */
+const openRegularizationDoc = () => {
+  const url = regularizationDoc.value?.url
+  if (!url) return
+  window.open(url, '_blank')
+}
+
 /** 考核人员头像（按姓名生成稳定的占位头像） */
 const avatarFor = (name: string) =>
   `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`
-
-/* ========== 转正记录 编辑 ========== */
-const regularizationDrawerVisible = ref(false)
-const isEditRegularization = computed(() => !!regularizationRecord.value)
-const regularizationDrawerTitle = computed(() =>
-  isEditRegularization.value ? '编辑转正记录' : '添加转正记录'
-)
-const defaultRegularizationForm = () => ({
-  date: '',
-  report: '',
-  description: '',
-  reviewers: [] as RegularizationReviewer[],
-})
-const regularizationForm = reactive(defaultRegularizationForm())
-
-const openAddRegularization = () => {
-  Object.assign(regularizationForm, defaultRegularizationForm())
-  regularizationDrawerVisible.value = true
-}
-const openEditRegularization = () => {
-  if (!regularizationRecord.value) return
-  regularizationForm.date = regularizationRecord.value.date
-  regularizationForm.report = regularizationRecord.value.report || ''
-  regularizationForm.description = regularizationRecord.value.description || ''
-  // 把已有考核人员拷贝到表单里，编辑时增删都在这份本地副本上
-  regularizationForm.reviewers = regularizationRecord.value.reviewers.map(r => ({
-    name: r.name,
-    attachment: r.attachment,
-  }))
-  regularizationDrawerVisible.value = true
-}
-const handleSaveRegularization = () => {
-  if (!regularizationForm.date) { Message.warning('请选择转正日期'); return }
-  if (!employee.value) return
-  if (!employee.value.regularizations) employee.value.regularizations = []
-
-  // 过滤掉空行（姓名未填的视为未填写，自动丢弃）
-  const cleanedReviewers = regularizationForm.reviewers
-    .filter(r => r.name && r.name.trim())
-    .map(r => ({
-      name: r.name.trim(),
-      attachment: r.attachment || undefined,
-    }))
-
-  const payload: RegularizationRecord = {
-    date: regularizationForm.date,
-    report: regularizationForm.report || undefined,
-    description: regularizationForm.description || undefined,
-    reviewers: cleanedReviewers,
-  }
-
-  if (regularizationRecord.value) {
-    Object.assign(regularizationRecord.value, payload)
-    Message.success('转正记录已更新')
-  } else {
-    employee.value.regularizations.push(payload)
-    Message.success('转正记录已添加')
-  }
-  regularizationDrawerVisible.value = false
-}
-const handleCancelRegularization = () => {
-  regularizationDrawerVisible.value = false
-}
-const deleteRegularization = () => {
-  if (!employee.value) return
-  employee.value.regularizations = []
-  Message.success('转正记录已删除')
-}
-
-/** 上传转正汇报文档：登记到员工附件中，并把文件名写到表单 */
-const handleRegularizationFileUpload = (fileItem: any) => {
-  const file = fileItem?.file as File | undefined
-  if (!file || !employee.value) return
-  const name = file.name
-  const size = formatFileSize(file.size)
-  const uploadDate = new Date().toISOString().slice(0, 10)
-  if (!employee.value.attachments.find(a => a.name === name)) {
-    employee.value.attachments.push({ name, category: '劳动合同', size, uploadDate, uploader: employee.value.name })
-  }
-  regularizationForm.report = name
-}
-
-/* ========== 抽屉内：考核人员 表格式行内增删 ========== */
-
-/** 新增一空行：姓名输入框 + 上传按钮 + 删除 */
-const addNewReviewerRow = () => {
-  regularizationForm.reviewers.push({ name: '', attachment: '' })
-}
-
-const removeFormReviewer = (idx: number) => {
-  regularizationForm.reviewers.splice(idx, 1)
-}
-
-/** 抽屉内：考核人员上传评分表（按行索引直接写入对应行） */
-const handleRowReviewerFileChange = (fileItem: any, idx: number) => {
-  const file = fileItem?.file as File | undefined
-  if (!file || !employee.value) return
-  const name = file.name
-  const size = formatFileSize(file.size)
-  const uploadDate = new Date().toISOString().slice(0, 10)
-  if (!employee.value.attachments.find(a => a.name === name)) {
-    employee.value.attachments.push({ name, category: '劳动合同', size, uploadDate, uploader: employee.value.name })
-  }
-  const target = regularizationForm.reviewers[idx]
-  if (target) target.attachment = name
-}
 
 /** 成长记录 stepper 节点图标（用自定义图片） */
 const growthIconImg = (key: GrowthRecord['type']) => {
@@ -2171,278 +2014,279 @@ const InfoCell = defineComponent({
   color: var(--color-neutral-4);
 }
 
-/* ===== 转正记录 卡片 ===== */
-.regularization-card {
+/* ===== 转正记录：审批详情 + 审批记录 ===== */
+.regularization-block {
+  background: var(--color-neutral-2);
+  border-radius: $border-radius-md;
   padding: $spacing-4 $spacing-5;
-}
-
-.regularization-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: $spacing-3;
-  padding-bottom: $spacing-3;
-  border-bottom: 1px solid var(--color-neutral-3);
   margin-bottom: $spacing-4;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+
+  .section-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: $spacing-3;
+    padding-bottom: $spacing-2;
+    border-bottom: 1px solid var(--color-neutral-3);
+    font-family: 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', sans-serif;
+  }
 }
 
-.regularization-meta {
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-2;
-  flex: 1;
+/* 审批详情：左标签 + 右值的两列栅格 */
+.approval-detail-grid {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  row-gap: $spacing-3;
+  column-gap: $spacing-4;
+  align-items: start;
+}
+
+.approval-detail-label {
+  color: $color-neutral-7;
+  font-size: $font-size-body;
+  line-height: 22px;
+}
+
+.approval-detail-value {
+  color: $color-neutral-10;
+  font-size: $font-size-body;
+  line-height: 22px;
   min-width: 0;
 }
 
-.meta-row {
-  display: flex;
-  align-items: baseline;
-  gap: $spacing-2;
-
-  .meta-label {
-    flex-shrink: 0;
-    color: $color-neutral-7;
-    min-width: 70px;
-  }
-
-  .meta-value {
-    color: $color-neutral-10;
-    font-weight: $font-weight-medium;
-  }
+/* 部门徽标 */
+.dept-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-1;
+  padding: 1px 10px;
+  border-radius: $border-radius-sm;
+  background: $color-primary-1;
+  color: $color-primary-7;
+  font-weight: $font-weight-medium;
 }
 
-.regularization-section {
-  margin-top: $spacing-4;
-
-  &:first-of-type {
-    margin-top: 0;
-  }
+/* 转正文档预览卡片 */
+.doc-preview {
+  border: 1px solid var(--color-neutral-3);
+  border-radius: $border-radius-md;
+  background: var(--color-bg-1);
+  overflow: hidden;
 }
 
-.section-title-sm {
+.doc-toolbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: $spacing-3;
+  padding: $spacing-2 $spacing-3;
+  border-bottom: 1px solid var(--color-neutral-3);
+  background: var(--color-neutral-2);
+}
+
+.doc-title {
+  display: inline-flex;
+  align-items: center;
   gap: $spacing-2;
-  margin-bottom: $spacing-3;
+  min-width: 0;
   font-size: $font-size-body;
   font-weight: $font-weight-medium;
   color: $color-neutral-10;
 }
 
-.reviewer-list {
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-2;
-}
-
-.reviewer-item {
-  display: flex;
+.doc-tools {
+  display: inline-flex;
   align-items: center;
-  gap: $spacing-3;
-  padding: $spacing-2 $spacing-3;
-  background: var(--color-bg-1);
-  border: 1px solid var(--color-neutral-3);
-  border-radius: $border-radius-md;
-}
-
-.reviewer-avatar {
-  background: $color-primary-1;
+  gap: $spacing-1;
   flex-shrink: 0;
 }
 
-.reviewer-info {
-  flex: 1;
-  min-width: 0;
+.doc-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: $border-radius-sm;
+  cursor: pointer;
+  color: $color-neutral-7;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background: var(--color-neutral-3);
+    color: $color-neutral-10;
+  }
 }
 
-.reviewer-name {
-  font-weight: $font-weight-medium;
-  color: $color-neutral-10;
-  margin-bottom: 4px;
+.doc-body {
+  position: relative;
+  height: 520px;
 }
 
-.reviewer-attachment {
+.doc-loading {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-2;
+  color: $color-neutral-7;
   font-size: $font-size-caption;
 }
 
-.regularization-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: $spacing-3;
-  padding: $spacing-5 0;
-}
-
-.report-upload-preview {
-  margin-top: $spacing-2;
-}
-
-/* 转正记录抽屉内：考核人员 标准表单式行内管理 */
-.reviewer-section {
-  display: flex;
-  flex-direction: column;
+.doc-frame {
+  display: block;
   width: 100%;
+  height: 100%;
+  border: 0;
 }
 
-.reviewer-add-btn {
-  align-self: flex-start;
-  margin-bottom: $spacing-3;
-}
-
-.reviewer-row {
-  display: flex;
-  align-items: center;
-  gap: $spacing-3;
-  padding: $spacing-2 $spacing-3;
-  margin-bottom: $spacing-2;
-  background: var(--color-bg-1);
-  border: 1px solid var(--color-neutral-3);
-  border-radius: $border-radius-md;
-  flex-wrap: nowrap;
-}
-
-.reviewer-field {
+/* 审批记录：审批人 / 审批时间 */
+.approval-person {
   display: flex;
   align-items: center;
   gap: $spacing-2;
+}
+
+.approval-avatar {
   flex-shrink: 0;
+  background: $color-primary-1;
 }
 
-.reviewer-field-label {
-  color: var(--color-neutral-7);
-  font-size: $font-size-body;
-  white-space: nowrap;
-}
-
-.reviewer-name-wrap {
-  width: 140px;
-  flex-shrink: 0;
-  flex-grow: 0;
-  position: relative;
-}
-
-.reviewer-name-wrap :deep(.arco-select) {
-  width: 100%;
-}
-
-.reviewer-name-wrap :deep(.arco-select-view),
-.reviewer-name-wrap :deep(.arco-select-view-input) {
-  min-width: 0;
-  width: 100%;
-}
-
-.reviewer-field-attachment {
-  flex: 1;
-  min-width: 0;
-  flex-shrink: 1;
-  flex-wrap: nowrap;
-}
-
-.reviewer-file-tag {
-  max-width: 220px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex-shrink: 1;
-}
-
-.reviewer-delete-btn {
-  margin-left: auto;
-  flex-shrink: 0;
-}
-
-/* ===== 转正记录：垂直审批流 ===== */
-.approval-flow {
-  position: relative;
-  padding: $spacing-2 0 $spacing-2 8px;
-}
-
-.approval-step {
-  position: relative;
-  padding: 0 0 $spacing-5 28px;
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 7px;
-    top: 10px;
-    bottom: 0;
-    width: 2px;
-    background: var(--color-neutral-3);
-  }
-}
-
-.approval-step-last {
-  padding-bottom: 0;
-
-  &::before { display: none; }
-}
-
-.approval-dot {
-  position: absolute;
-  left: 0;
-  top: 4px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: $color-primary-6;
-  border: 3px solid var(--color-bg-1);
-  box-shadow: 0 0 0 1px $color-primary-6;
-}
-
-.approval-title {
-  font-size: $font-size-body;
-  font-weight: $font-weight-medium;
+.approval-person-name {
   color: $color-neutral-10;
-  margin-bottom: $spacing-2;
-}
-
-.approval-key {
-  color: var(--color-neutral-7);
-  margin-right: 4px;
-}
-
-.approval-desc {
-  color: var(--color-neutral-8);
   font-size: $font-size-body;
-  line-height: 1.8;
 }
 
-.approval-reviewers {
+.approval-time {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+.approval-time-rel {
+  font-size: $font-size-body;
+  color: $color-neutral-10;
+}
+
+.approval-time-abs {
+  font-size: $font-size-caption;
+  color: $color-neutral-7;
+}
+
+/* ===== 审批记录：垂直时间轴 ===== */
+.approval-timeline {
   display: flex;
   flex-direction: column;
 }
 
-.approval-reviewer {
+.approval-timeline-item {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: $spacing-3;
-  padding: $spacing-3 0;
-  border-bottom: 1px solid var(--color-neutral-3);
-  transition: background-color $transition-fast;
+  padding-bottom: $spacing-4;
 
   &:last-child {
-    border-bottom: none;
-  }
-
-  &:hover {
-    background-color: var(--color-neutral-2);
+    padding-bottom: 0;
   }
 }
 
-.reviewer-name {
-  font-weight: $font-weight-medium;
-  color: $color-neutral-10;
-}
-
-.reviewer-attachment {
+/* 左侧竖线 + 节点圆点 */
+.approval-timeline-rail {
+  position: relative;
+  width: 12px;
   flex-shrink: 0;
-  margin-left: 20px;
-  max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: flex;
+  justify-content: center;
+
+  /* 从本节点圆心一直连到下一个节点圆心 */
+  &::before {
+    content: '';
+    position: absolute;
+    top: 10px;
+    bottom: -($spacing-4 + 10px);
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    background: var(--color-neutral-5);
+  }
+}
+
+.approval-timeline-item:last-child .approval-timeline-rail::before {
+  display: none;
+}
+
+.approval-timeline-dot {
+  position: relative;
+  z-index: 1;
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: $color-primary-6;
+  box-shadow: 0 0 0 3px var(--color-neutral-2);
+}
+
+.approval-timeline-item.is-success .approval-timeline-dot {
+  background: $color-success-6;
+}
+
+.approval-timeline-item.is-error .approval-timeline-dot {
+  background: $color-error-6;
+}
+
+.approval-timeline-item.is-pending .approval-timeline-dot {
+  background: $color-neutral-6;
+}
+
+/* 右侧内容 */
+.approval-timeline-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.approval-timeline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-3;
+}
+
+.approval-timeline-person {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  min-width: 0;
+}
+
+.approval-node-label {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: $border-radius-sm;
+  background: var(--color-neutral-3);
+  color: $color-neutral-7;
+  font-size: $font-size-caption;
+  line-height: 18px;
+}
+
+.approval-timeline-comment {
+  margin-top: $spacing-1;
+  padding: $spacing-2 $spacing-3;
+  border-radius: $border-radius-sm;
+  background: var(--color-neutral-2);
+  color: $color-neutral-8;
+  font-size: $font-size-body;
+  line-height: 1.7;
 }
 
 /* 表格「操作」列：编辑/删除同行不换行 */
