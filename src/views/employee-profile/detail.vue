@@ -546,6 +546,168 @@
               </div>
               <a-empty v-else description="暂无审批记录" />
             </div>
+
+            <!-- 考核记录：左考评人列表 + 右转正考评表 -->
+            <div class="regularization-block">
+              <div class="section-title">考核记录</div>
+              <a-empty v-if="!assessmentRecords.length" description="暂无考核记录" />
+              <div v-else class="assessment-master">
+                <!-- 左：考评人列表 -->
+                <div class="assessment-list">
+                  <div
+                    v-for="rec in assessmentRecords"
+                    :key="rec.id"
+                    class="assessment-list-item"
+                    :class="{ 'is-active': rec.id === activeAssessmentId }"
+                    @click="activeAssessmentId = rec.id"
+                  >
+                    <a-avatar :size="28" class="approval-avatar">
+                      <img :src="avatarFor(rec.assessor)" :alt="rec.assessor" />
+                    </a-avatar>
+                    <div class="assessment-list-body">
+                      <div class="assessment-list-head">
+                        <span class="assessment-list-name">{{ rec.assessor }}</span>
+                        <a-tag :color="assessmentRoleColor(rec.role)" size="small">
+                          {{ assessmentRoleText(rec.role) }}
+                        </a-tag>
+                      </div>
+                      <div class="assessment-list-meta">
+                        <span
+                          class="assessment-score"
+                          :class="scoreLevel(ratioOf(assessmentTotal(rec), assessmentMaxScore))"
+                        >
+                          {{ assessmentTotal(rec) }} 分
+                        </span>
+                        <span class="assessment-list-conclusion">{{ rec.conclusion }}</span>
+                      </div>
+                      <div class="assessment-list-time">
+                        {{ relativeTime(rec.time) }} · {{ formatShortDateTime(rec.time) }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 右：转正考评表 -->
+                <div v-if="activeAssessment" class="assessment-sheet">
+                  <!-- 顶部信息条：谁在评、评谁、什么时候 -->
+                  <header class="sheet-head">
+                    <div class="sheet-head-main">
+                      <span class="sheet-emp">{{ employee.name }}</span>
+                      <span class="sheet-meta">{{ employee.department }} · {{ employee.position }}</span>
+                    </div>
+                    <div class="sheet-head-side">
+                      <span class="sheet-assessor">
+                        <a-avatar :size="20" class="approval-avatar">
+                          <img
+                            :src="avatarFor(activeAssessment.assessor)"
+                            :alt="activeAssessment.assessor"
+                          />
+                        </a-avatar>
+                        考评人 {{ activeAssessment.assessor }}
+                        <a-tag :color="assessmentRoleColor(activeAssessment.role)" size="small">
+                          {{ assessmentRoleText(activeAssessment.role) }}
+                        </a-tag>
+                      </span>
+                      <span class="sheet-time">{{ formatShortDateTime(activeAssessment.time) }}</span>
+                    </div>
+                  </header>
+
+                  <!-- 出勤情况 -->
+                  <div class="sheet-attendance">
+                    <span class="att-chip">
+                      <span class="att-label">迟到</span>{{ activeAssessment.attendance.late }} 次
+                    </span>
+                    <span class="att-chip">
+                      <span class="att-label">事假</span>{{ activeAssessment.attendance.personalLeave }} 小时
+                    </span>
+                    <span class="att-chip">
+                      <span class="att-label">病假</span>{{ activeAssessment.attendance.sickLeave }} 小时
+                    </span>
+                    <span class="att-chip">
+                      <span class="att-label">入职</span>{{ employee.entryDate }}
+                    </span>
+                    <span class="att-chip">
+                      <span class="att-label">转正</span>{{ activeAssessmentDate }}
+                    </span>
+                  </div>
+
+                  <!-- 3 个考核项目分组 -->
+                  <section
+                    v-for="group in assessmentGroups"
+                    :key="group.name"
+                    class="score-group"
+                  >
+                    <header class="group-head">
+                      <span class="group-name">{{ group.name }}</span>
+                      <span class="group-max">{{ group.total }} 分</span>
+                      <span class="group-sum" :class="scoreLevel(groupRatio(group))">
+                        {{ group.score }} / {{ group.total }}
+                      </span>
+                    </header>
+
+                    <div class="group-items">
+                      <div v-for="item in group.items" :key="item.point" class="score-item">
+                        <div class="item-body">
+                          <div class="item-head">
+                            <span class="item-point">{{ item.point }}</span>
+                            <span class="item-max">{{ item.maxScore }} 分</span>
+                          </div>
+                          <div class="item-standard" :title="item.standard">
+                            {{ item.standard }}
+                          </div>
+                        </div>
+                        <div class="item-score">
+                          <div class="score-bar">
+                            <i
+                              :class="scoreLevel(itemRatio(item))"
+                              :style="{ width: itemRatio(item) + '%' }"
+                            />
+                          </div>
+                          <span class="score-num" :class="scoreLevel(itemRatio(item))">
+                            {{ activeAssessment.scores[item.point] ?? '—' }}
+                          </span>
+                          <span class="score-max">/ {{ item.maxScore }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <!-- 总分 + 结论 -->
+                  <div class="sheet-total">
+                    <div class="total-score" :class="scoreLevel(totalRatio)">
+                      <span class="total-num">{{ assessmentTotal(activeAssessment) }}</span>
+                      <span class="total-unit">分</span>
+                      <span class="total-max">满分 {{ assessmentMaxScore }}</span>
+                    </div>
+                    <div class="total-conclusion">
+                      <span
+                        v-for="opt in ASSESSMENT_CONCLUSIONS"
+                        :key="opt"
+                        class="assessment-option"
+                        :class="{ 'is-checked': activeAssessment.conclusion === opt }"
+                      >
+                        <span class="assessment-radio" />{{ opt }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- 意见栏：标题按考评人角色切换 -->
+                  <div class="sheet-opinion">
+                    <div class="opinion-label">
+                      {{ assessmentCommentLabel(activeAssessment.role) }}
+                    </div>
+                    <div class="opinion-text">{{ activeAssessment.comment || '—' }}</div>
+                  </div>
+
+                  <div class="assessment-notes">
+                    <div class="assessment-notes-title">注：</div>
+                    <ol>
+                      <li v-for="note in ASSESSMENT_NOTES" :key="note">{{ note }}</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </a-tab-pane>
 
@@ -942,8 +1104,17 @@ import {
   type AttachmentCategory,
   type RegularizationRecord,
   type RegularizationDoc,
+  type RegularizationAssessment,
+  type AssessmentRole,
   contractTypeOptions,
   attachmentCategoryOptions,
+  ASSESSMENT_GROUPS,
+  ASSESSMENT_CONCLUSIONS,
+  ASSESSMENT_NOTES,
+  ASSESSMENT_MAX_SCORE,
+  assessmentRoleText,
+  assessmentCommentLabel,
+  assessmentTotal,
 } from './data'
 import {
   IconDownload,
@@ -1564,6 +1735,80 @@ const approvalRecords = computed(() =>
   }))
 )
 
+/** 考核记录（每位考评人一份） */
+const assessmentRecords = computed<RegularizationAssessment[]>(
+  () => regularizationRecord.value?.assessments || [],
+)
+
+/** 当前选中的考评人 id（左侧列表） */
+const activeAssessmentId = ref<string>('')
+
+/** 当前选中的考评记录（右侧考评表） */
+const activeAssessment = computed<RegularizationAssessment | null>(
+  () =>
+    assessmentRecords.value.find((a) => a.id === activeAssessmentId.value) ||
+    assessmentRecords.value[0] ||
+    null,
+)
+
+/** 转正日期（考评表表头用） */
+const activeAssessmentDate = computed(
+  () => regularizationRecord.value?.date || '—',
+)
+
+/** 考评表分组（含该组实得小计） */
+const assessmentGroups = computed(() =>
+  ASSESSMENT_GROUPS.map((g) => ({
+    ...g,
+    score: g.items.reduce(
+      (s, item) => s + (activeAssessment.value?.scores[item.point] ?? 0),
+      0,
+    ),
+  })),
+)
+
+/** 得分率（百分比） */
+const ratioOf = (score: number, max: number): number =>
+  max > 0 ? Math.round((score / max) * 100) : 0
+
+/** 得分率配色等级：≥90% 绿 / 80~90% 蓝 / <80% 橙 */
+const scoreLevel = (ratio: number): 'is-good' | 'is-mid' | 'is-low' =>
+  ratio >= 90 ? 'is-good' : ratio >= 80 ? 'is-mid' : 'is-low'
+
+/** 某个考核项目组的得分率 */
+const groupRatio = (g: { score: number; total: number }) => ratioOf(g.score, g.total)
+
+/** 某条评价要点的得分率 */
+const itemRatio = (item: { point: string; maxScore: number }) =>
+  ratioOf(activeAssessment.value?.scores[item.point] ?? 0, item.maxScore)
+
+/** 总分得分率 */
+const totalRatio = computed(() =>
+  activeAssessment.value
+    ? ratioOf(assessmentTotal(activeAssessment.value), assessmentMaxScore)
+    : 0,
+)
+
+/** 考评表满分（三组合计） */
+const assessmentMaxScore = ASSESSMENT_MAX_SCORE
+
+/** 考评人角色标签配色 */
+const assessmentRoleColor = (role: AssessmentRole) => {
+  if (role === 'directLeader') return 'green'
+  if (role === 'partnerLeader') return 'cyan'
+  if (role === 'chairman') return 'orange'
+  return 'arcoblue'
+}
+
+/** 切换员工时重置选中的考评人 */
+watch(
+  () => employee.value?.id,
+  () => {
+    activeAssessmentId.value = assessmentRecords.value[0]?.id || ''
+  },
+  { immediate: true },
+)
+
 /** 审批结果标签配色 */
 const approvalResultColor = (result: string) => {
   if (result === '已同意' || result === '自动通过') return 'green'
@@ -1580,8 +1825,8 @@ const approvalResultTone = (result: string) => {
   return 'default'
 }
 
-/** 转正文档预览：展开 / 收起 + 加载态 */
-const docExpanded = ref(true)
+/** 转正文档预览：展开 / 收起 + 加载态（默认收起，点箭头展开） */
+const docExpanded = ref(false)
 const docLoading = ref(true)
 
 /** 切换员工时重置加载态（iframe 按文档名重新挂载） */
@@ -2287,6 +2532,419 @@ const InfoCell = defineComponent({
   color: $color-neutral-8;
   font-size: $font-size-body;
   line-height: 1.7;
+}
+
+/* ===== 考核记录：左考评人列表 + 右转正考评表 ===== */
+.assessment-master {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-4;
+}
+
+/* 左：考评人列表 */
+.assessment-list {
+  width: 208px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+  max-height: 640px;
+  overflow-y: auto;
+}
+
+.assessment-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-2;
+  padding: $spacing-3;
+  border: 1px solid transparent;
+  border-radius: $border-radius-md;
+  background: var(--color-neutral-2);
+  cursor: pointer;
+  transition: border-color $transition-fast, background-color $transition-fast;
+
+  &:hover {
+    background: var(--color-primary-1);
+  }
+
+  &.is-active {
+    border-color: $color-primary-5;
+    background: var(--color-primary-1);
+  }
+}
+
+.assessment-list-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.assessment-list-head {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+}
+
+.assessment-list-name {
+  color: $color-neutral-10;
+  font-size: $font-size-body;
+  font-weight: $font-weight-medium;
+}
+
+.assessment-list-meta {
+  display: flex;
+  align-items: baseline;
+  gap: $spacing-2;
+  margin-top: 2px;
+}
+
+.assessment-list-conclusion {
+  color: $color-neutral-7;
+  font-size: $font-size-caption;
+}
+
+.assessment-list-time {
+  margin-top: 2px;
+  color: $color-neutral-6;
+  font-size: $font-size-caption;
+}
+
+.assessment-score {
+  font-size: $font-size-body;
+  font-weight: $font-weight-medium;
+}
+
+/* 右：转正考评表 */
+.assessment-sheet {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-3;
+}
+
+/* 顶部信息条：谁在评、评谁、什么时候 */
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-4;
+  padding: $spacing-3 $spacing-4;
+  border-radius: $border-radius-md;
+  background: var(--color-primary-1);
+}
+
+.sheet-head-main {
+  display: flex;
+  align-items: baseline;
+  gap: $spacing-3;
+  min-width: 0;
+}
+
+.sheet-emp {
+  color: $color-primary-10;
+  font-size: $font-size-heading;
+  font-weight: $font-weight-bold;
+}
+
+.sheet-meta {
+  color: $color-primary-8;
+  font-size: $font-size-body;
+}
+
+.sheet-head-side {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  flex-shrink: 0;
+}
+
+.sheet-assessor {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-2;
+  color: $color-primary-10;
+  font-size: $font-size-body;
+  font-weight: $font-weight-medium;
+}
+
+.sheet-time {
+  color: $color-primary-8;
+  font-size: $font-size-caption;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 出勤 / 入职 / 转正 小标签 */
+.sheet-attendance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-2;
+}
+
+.att-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-1;
+  padding: 2px $spacing-2;
+  border-radius: $border-radius-sm;
+  background: var(--color-fill-1);
+  color: $color-neutral-8;
+  font-size: $font-size-caption;
+  font-variant-numeric: tabular-nums;
+}
+
+.att-label {
+  color: $color-neutral-7;
+}
+
+/* ===== 考核项目分组 ===== */
+.score-group {
+  border: 1px solid var(--color-border-2);
+  border-radius: $border-radius-md;
+  overflow: hidden;
+  background: var(--color-bg-1);
+}
+
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  padding: $spacing-2 $spacing-4;
+  border-left: 3px solid $color-primary-6;
+  background: var(--color-fill-1);
+}
+
+.group-name {
+  color: $color-neutral-10;
+  font-size: $font-size-body;
+  font-weight: $font-weight-medium;
+}
+
+.group-max {
+  color: $color-neutral-7;
+  font-size: $font-size-caption;
+}
+
+.group-sum {
+  margin-left: auto;
+  min-width: 72px;
+  text-align: right;
+  font-size: $font-size-body;
+  font-weight: $font-weight-medium;
+  font-variant-numeric: tabular-nums;
+}
+
+.group-items {
+  padding: 0 $spacing-4;
+}
+
+.score-item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-4;
+  padding: $spacing-3 0;
+  border-top: 1px solid var(--color-border-1);
+}
+
+.item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.item-head {
+  display: flex;
+  align-items: baseline;
+  gap: $spacing-2;
+}
+
+.item-point {
+  color: $color-neutral-10;
+  font-size: $font-size-body;
+  font-weight: $font-weight-medium;
+}
+
+.item-max {
+  color: $color-neutral-7;
+  font-size: $font-size-caption;
+}
+
+/* 评价标准：降级为灰色小字，最多 2 行，超出省略（hover 看全文） */
+.item-standard {
+  margin-top: 2px;
+  color: $color-neutral-7;
+  font-size: $font-size-caption;
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+/* 得分：横条 + 数字 */
+.item-score {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  width: 200px;
+  flex-shrink: 0;
+}
+
+.score-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-fill-2);
+  overflow: hidden;
+}
+
+.score-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  transition: width $transition-base;
+}
+
+.score-num {
+  min-width: 22px;
+  text-align: right;
+  font-size: $font-size-body;
+  font-weight: $font-weight-bold;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-max {
+  color: $color-neutral-7;
+  font-size: $font-size-caption;
+}
+
+/* 得分率配色：≥90% 绿 / 80~90% 蓝 / <80% 橙 */
+.is-good {
+  color: $color-success-7;
+}
+
+.is-mid {
+  color: $color-primary-7;
+}
+
+.is-low {
+  color: $color-warning-7;
+}
+
+.score-bar > i.is-good {
+  background: $color-success-6;
+}
+
+.score-bar > i.is-mid {
+  background: $color-primary-6;
+}
+
+.score-bar > i.is-low {
+  background: $color-warning-6;
+}
+
+/* ===== 总分 + 结论 ===== */
+.sheet-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-4;
+  padding: $spacing-3 $spacing-4;
+  border: 1px solid var(--color-border-2);
+  border-radius: $border-radius-md;
+  background: var(--color-bg-1);
+}
+
+.total-score {
+  display: inline-flex;
+  align-items: baseline;
+  gap: $spacing-1;
+}
+
+.total-num {
+  font-size: 1.75rem;
+  font-weight: $font-weight-bold;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.total-unit {
+  font-size: $font-size-body;
+}
+
+.total-max {
+  margin-left: $spacing-2;
+  color: $color-neutral-7;
+  font-size: $font-size-caption;
+}
+
+.total-conclusion {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+}
+
+/* ===== 意见栏：标题按考评人角色切换 ===== */
+.sheet-opinion {
+  display: flex;
+  gap: $spacing-3;
+  padding: $spacing-3 $spacing-4;
+  border-left: 3px solid $color-primary-6;
+  border-radius: 0 $border-radius-md $border-radius-md 0;
+  background: var(--color-fill-1);
+}
+
+.opinion-label {
+  flex-shrink: 0;
+  color: $color-neutral-8;
+  font-size: $font-size-body;
+  font-weight: $font-weight-medium;
+}
+
+.opinion-text {
+  color: $color-neutral-9;
+  font-size: $font-size-body;
+  line-height: 1.7;
+}
+
+/* 结论单选圈 */
+.assessment-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: $spacing-4;
+  color: $color-neutral-8;
+}
+
+.assessment-radio {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1px solid $color-neutral-6;
+  border-radius: 50%;
+}
+
+.assessment-option.is-checked {
+  color: $color-neutral-10;
+
+  .assessment-radio {
+    border: 4px solid $color-primary-6;
+  }
+}
+
+/* 底部注释 */
+.assessment-notes {
+  margin-top: $spacing-3;
+  color: $color-neutral-7;
+  font-size: $font-size-caption;
+  line-height: 1.8;
+
+  .assessment-notes-title {
+    font-weight: $font-weight-medium;
+  }
+
+  ol {
+    margin: 0;
+    padding-left: $spacing-5;
+  }
 }
 
 /* 表格「操作」列：编辑/删除同行不换行 */

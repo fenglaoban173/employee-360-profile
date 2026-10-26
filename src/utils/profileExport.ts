@@ -7,6 +7,14 @@ import type {
   Contract,
   TrainingRecord,
 } from '@/views/employee-profile/data'
+import {
+  ASSESSMENT_GROUPS,
+  ASSESSMENT_NOTES,
+  ASSESSMENT_MAX_SCORE,
+  assessmentRoleText,
+  assessmentCommentLabel,
+  assessmentTotal,
+} from '@/views/employee-profile/data'
 import { employeeStatusText, relativeTime, formatShortDateTime } from '@/utils/format'
 
 /**
@@ -57,6 +65,15 @@ const writeTitle = (ws: ExcelJS.Worksheet, title: string, span = 4) => {
   }
   cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 }
   ws.getRow(1).height = 28
+}
+
+/** 通用：得分率配色（与页面一致）——≥90% 绿 / 80~90% 蓝 / <80% 橙 */
+const scoreColorArgb = (score: number, max: number): string => {
+  if (max <= 0) return 'FF1677FF'
+  const ratio = score / max
+  if (ratio >= 0.9) return 'FF389E0D'
+  if (ratio >= 0.8) return 'FF0958D9'
+  return 'FFD48806'
 }
 
 /** 通用：单元格细边框（每次返回新对象，避免 exceljs 复用同一引用） */
@@ -451,13 +468,15 @@ const buildContractSheet = (wb: ExcelJS.Workbook, e: Employee) => {
 /**
  * 转正记录 sheet（数据由飞书审批同步，只读）
  * 上半部分：审批详情（部门 / 入职时间 / 转正日期 / 转正文档）
- * 下半部分：审批记录（节点名称 / 审批人 / 审批结果 / 审批意见 / 审批时间）
+ * 中间部分：审批记录（节点名称 / 审批人 / 审批结果 / 审批意见 / 审批时间，竖版时间轴）
+ * 下半部分：考核记录（每位考评人一份转正考评表）
  */
 const buildRegularizationSheet = (wb: ExcelJS.Workbook, e: Employee) => {
   const ws = wb.addWorksheet('转正记录')
   // A 列 = 节点线（圆点 + 竖线），B~F = 节点名称 / 审批人 / 审批结果 / 审批意见 / 审批时间
+  //                              考核项目 / 评价要点 / 项目分值 / 评价标准 / 得分
   ws.columns = [
-    { width: 3 }, { width: 12 }, { width: 14 }, { width: 12 }, { width: 40 }, { width: 22 },
+    { width: 3 }, { width: 16 }, { width: 20 }, { width: 12 }, { width: 36 }, { width: 22 },
   ]
   writeTitle(ws, '转正记录 · Tab 6', 6)
 
@@ -498,55 +517,197 @@ const buildRegularizationSheet = (wb: ExcelJS.Workbook, e: Employee) => {
   ], 2)
 
   const approvals = rec?.approvals || []
+  let cursor = colHeaderRow + 1
   if (approvals.length === 0) {
-    const r = colHeaderRow + 1
+    mergeStyled(ws, cursor, 1, cursor, 6, (cell) => {
+      cell.alignment = { vertical: 'middle', horizontal: 'center' }
+    })
+    ws.getCell(cursor, 1).value = rec ? '暂无审批记录' : '暂无转正记录'
+    cursor++
+  } else {
+    approvals.forEach((a, i) => {
+      const r = colHeaderRow + 1 + i
+      const tone = approvalTone(a.result)
+
+      // 左侧节点：圆点 + 竖向连线（用单元格右边框画竖线，逐行连续）
+      const nodeCell = ws.getCell(r, 1)
+      nodeCell.value = '●'
+      nodeCell.font = { size: 10, color: { argb: tone.dot } }
+      nodeCell.alignment = { vertical: 'middle', horizontal: 'right' }
+      nodeCell.border = {
+        right: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+      }
+
+      // 右侧内容
+      const put = (col: number, value: string, align: 'left' | 'center' = 'left') => {
+        const cell = ws.getCell(r, col)
+        cell.value = value
+        cell.alignment = { vertical: 'middle', horizontal: align, wrapText: true }
+        cell.border = {
+          bottom: { style: 'hair', color: { argb: 'FFE5E6EB' } },
+        }
+      }
+      put(2, a.node)
+      put(3, a.approver)
+      put(4, a.result, 'center')
+      put(5, a.comment ?? '—')
+      if (!a.comment) {
+        ws.getCell(r, 5).font = { color: { argb: 'FFBFBFBF' } }
+      }
+      // 审批结果按状态着色（对应页面上的彩色标签）
+      ws.getCell(r, 4).font = { bold: true, color: { argb: tone.text } }
+
+      // 时间：相对时间在上、绝对时间在下（与页面一致）
+      const timeCell = ws.getCell(r, 6)
+      timeCell.value = `${relativeTime(a.time)}\n${formatShortDateTime(a.time)}`
+      timeCell.alignment = { vertical: 'middle', horizontal: 'right', wrapText: true }
+      timeCell.border = {
+        bottom: { style: 'hair', color: { argb: 'FFE5E6EB' } },
+      }
+      // 行高不写死，留给 Excel 按换行内容自动撑开
+    })
+    cursor = colHeaderRow + 1 + approvals.length
+  }
+
+  // ===== 考核记录：每位考评人一份转正考评表 =====
+  const assessLabelRow = cursor + 1
+  writeSectionLabel(ws, assessLabelRow, 6, '考核记录')
+
+  const assessments = rec?.assessments || []
+  if (assessments.length === 0) {
+    const r = assessLabelRow + 1
     mergeStyled(ws, r, 1, r, 6, (cell) => {
       cell.alignment = { vertical: 'middle', horizontal: 'center' }
     })
-    ws.getCell(r, 1).value = rec ? '暂无审批记录' : '暂无转正记录'
+    ws.getCell(r, 1).value = rec ? '暂无考核记录' : '暂无转正记录'
     return
   }
 
-  approvals.forEach((a, i) => {
-    const r = colHeaderRow + 1 + i
-    const tone = approvalTone(a.result)
+  const labelStyle = (cell: ExcelJS.Cell) => {
+    cell.font = { bold: true, color: { argb: 'FF4E5969' } }
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF7F8FA' } }
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+    cell.border = cellBorder()
+  }
+  const valueStyle = (cell: ExcelJS.Cell) => {
+    cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1, wrapText: true }
+    cell.border = cellBorder()
+  }
 
-    // 左侧节点：圆点 + 竖向连线（用单元格右边框画竖线，逐行连续）
-    const nodeCell = ws.getCell(r, 1)
-    nodeCell.value = '●'
-    nodeCell.font = { size: 10, color: { argb: tone.dot } }
-    nodeCell.alignment = { vertical: 'middle', horizontal: 'right' }
-    nodeCell.border = {
-      right: { style: 'thin', color: { argb: 'FFD9D9D9' } },
-    }
+  let ar = assessLabelRow + 1
+  assessments.forEach((a) => {
+    // --- 考评人信息（2 行）---
+    // 行 1：考评人 / 角色 / 得分
+    mergeStyled(ws, ar, 1, ar, 2, labelStyle)
+    ws.getCell(ar, 1).value = '考评人'
+    ws.getCell(ar, 3).value = a.assessor
+    valueStyle(ws.getCell(ar, 3))
+    ws.getCell(ar, 4).value = '角色'
+    labelStyle(ws.getCell(ar, 4))
+    ws.getCell(ar, 5).value = assessmentRoleText(a.role)
+    valueStyle(ws.getCell(ar, 5))
+    const scoreCell = ws.getCell(ar, 6)
+    const aTotal = assessmentTotal(a)
+    scoreCell.value = `得分 ${aTotal} 分 · ${a.conclusion}`
+    scoreCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+    scoreCell.font = { bold: true, color: { argb: scoreColorArgb(aTotal, ASSESSMENT_MAX_SCORE) } }
+    scoreCell.border = cellBorder()
+    ws.getRow(ar).height = 20
 
-    // 右侧内容
-    const put = (col: number, value: string, align: 'left' | 'center' = 'left') => {
-      const cell = ws.getCell(r, col)
-      cell.value = value
-      cell.alignment = { vertical: 'middle', horizontal: align, wrapText: true }
-      cell.border = {
-        bottom: { style: 'hair', color: { argb: 'FFE5E6EB' } },
-      }
-    }
-    put(2, a.node)
-    put(3, a.approver)
-    put(4, a.result, 'center')
-    put(5, a.comment ?? '—')
-    if (!a.comment) {
-      ws.getCell(r, 5).font = { color: { argb: 'FFBFBFBF' } }
-    }
-    // 审批结果按状态着色（对应页面上的彩色标签）
-    ws.getCell(r, 4).font = { bold: true, color: { argb: tone.text } }
-
-    // 时间：相对时间在上、绝对时间在下（与页面一致）
-    const timeCell = ws.getCell(r, 6)
+    // 行 2：考评时间 / 意见（标题按角色切换）
+    mergeStyled(ws, ar + 1, 1, ar + 1, 2, labelStyle)
+    ws.getCell(ar + 1, 1).value = '考评时间'
+    const timeCell = ws.getCell(ar + 1, 3)
     timeCell.value = `${relativeTime(a.time)}\n${formatShortDateTime(a.time)}`
-    timeCell.alignment = { vertical: 'middle', horizontal: 'right', wrapText: true }
-    timeCell.border = {
-      bottom: { style: 'hair', color: { argb: 'FFE5E6EB' } },
-    }
-    // 行高不写死，留给 Excel 按换行内容自动撑开
+    timeCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1, wrapText: true }
+    timeCell.border = cellBorder()
+    ws.getCell(ar + 1, 4).value = assessmentCommentLabel(a.role)
+    labelStyle(ws.getCell(ar + 1, 4))
+    mergeStyled(ws, ar + 1, 5, ar + 1, 6, valueStyle)
+    ws.getCell(ar + 1, 5).value = a.comment || '—'
+
+    // 行 3：出勤情况
+    mergeStyled(ws, ar + 2, 1, ar + 2, 2, labelStyle)
+    ws.getCell(ar + 2, 1).value = '出勤情况'
+    mergeStyled(ws, ar + 2, 3, ar + 2, 6, valueStyle)
+    ws.getCell(ar + 2, 3).value =
+      `迟到 ${a.attendance?.late ?? '—'} 次；事假 ${a.attendance?.personalLeave ?? '—'} 小时；` +
+      `病假 ${a.attendance?.sickLeave ?? '—'} 小时`
+
+    // --- 考评表明细 ---
+    let dr = ar + 3
+    writeHeader(ws, dr, [
+      '考核项目', '评价要点', '项目分值', '评价标准', '得分',
+    ], 2)
+    dr++
+
+    ASSESSMENT_GROUPS.forEach((g) => {
+      const groupStart = dr
+      g.items.forEach((item, ii) => {
+        const r = groupStart + ii
+        // B 列：考核项目（组内首行竖向合并）
+        if (ii === 0) {
+          mergeStyled(ws, groupStart, 2, groupStart + g.items.length - 1, 2, (cell) => {
+            cell.font = { bold: true, color: { argb: 'FF1D2129' } }
+            cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+            cell.border = cellBorder()
+          })
+          ws.getCell(groupStart, 2).value = `${g.name}\n(${g.total}分)`
+        }
+        const pointCell = ws.getCell(r, 3)
+        pointCell.value = item.point
+        pointCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+        pointCell.border = cellBorder()
+
+        const maxCell = ws.getCell(r, 4)
+        maxCell.value = item.maxScore
+        maxCell.alignment = { vertical: 'middle', horizontal: 'center' }
+        maxCell.border = cellBorder()
+
+        const standardCell = ws.getCell(r, 5)
+        standardCell.value = item.standard
+        standardCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1, wrapText: true }
+        standardCell.border = cellBorder()
+
+        const sCell = ws.getCell(r, 6)
+        const got = a.scores[item.point] ?? 0
+        sCell.value = got
+        sCell.alignment = { vertical: 'middle', horizontal: 'center' }
+        // 得分率配色（与页面一致）：≥90% 绿 / 80~90% 蓝 / <80% 橙
+        sCell.font = { bold: true, color: { argb: scoreColorArgb(got, item.maxScore) } }
+        sCell.border = cellBorder()
+      })
+      dr += g.items.length
+    })
+
+    // 得分 / 结论
+    mergeStyled(ws, dr, 1, dr, 2, labelStyle)
+    ws.getCell(dr, 1).value = '得分'
+    mergeStyled(ws, dr, 3, dr, 5, valueStyle)
+    ws.getCell(dr, 3).value = `满分 ${ASSESSMENT_MAX_SCORE} 分`
+    const totalCell = ws.getCell(dr, 6)
+    const total = assessmentTotal(a)
+    totalCell.value = total
+    totalCell.alignment = { vertical: 'middle', horizontal: 'center' }
+    totalCell.font = { bold: true, color: { argb: scoreColorArgb(total, ASSESSMENT_MAX_SCORE) } }
+    totalCell.border = cellBorder()
+
+    dr++
+    mergeStyled(ws, dr, 1, dr, 2, labelStyle)
+    ws.getCell(dr, 1).value = '结论'
+    mergeStyled(ws, dr, 3, dr, 6, valueStyle)
+    ws.getCell(dr, 3).value = a.conclusion
+
+    ar = dr + 2
+  })
+
+  // --- 底部注释 ---
+  ASSESSMENT_NOTES.forEach((note, i) => {
+    const r = ar + i
+    mergeStyled(ws, r, 1, r, 6, (cell) => {
+      cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1, wrapText: true }
+    })
+    ws.getCell(r, 1).value = `${i + 1}. ${note}`
   })
 }
 

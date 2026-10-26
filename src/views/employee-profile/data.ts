@@ -52,6 +52,62 @@ export interface RegularizationDoc {
   url: string
 }
 
+/** 考评人角色：决定评分表底部意见栏的标题 */
+export type AssessmentRole = 'directLeader' | 'partnerLeader' | 'chairman'
+
+/** 考评结论 */
+export type AssessmentConclusion = '正常转正' | '延长试用' | '劝退'
+
+/** 考评表模板：评价要点 */
+export interface AssessmentItemTemplate {
+  /** 评价要点 */
+  point: string
+  /** 评价标准 */
+  standard: string
+  /** 项目分值 */
+  maxScore: number
+}
+
+/** 考评表模板：考核项目分组 */
+export interface AssessmentGroupTemplate {
+  /** 考核项目：工作业绩 / 工作态度 / 综合能力 */
+  name: string
+  /** 该组满分 */
+  total: number
+  /** 评价要点列表 */
+  items: AssessmentItemTemplate[]
+}
+
+/** 考勤情况 */
+export interface AssessmentAttendance {
+  /** 迟到：实际/应到（次） */
+  late: string
+  /** 事假：实际/应出勤（小时） */
+  personalLeave: string
+  /** 病假（小时） */
+  sickLeave: string
+}
+
+/** 转正考评（每位考评人一份，飞书同步的文档记录，只读） */
+export interface RegularizationAssessment {
+  /** 记录 id */
+  id: string
+  /** 考评人姓名 */
+  assessor: string
+  /** 考评人角色（决定底部意见栏标题） */
+  role: AssessmentRole
+  /** 考评时间（YYYY-MM-DD HH:mm） */
+  time: string
+  /** 考勤情况 */
+  attendance: AssessmentAttendance
+  /** 各项得分，key = 评价要点 */
+  scores: Record<string, number>
+  /** 结论 */
+  conclusion: AssessmentConclusion
+  /** 考评意见 */
+  comment: string
+}
+
 /** 转正记录（数据由飞书同步，前端只读） */
 export interface RegularizationRecord {
   /** 转正日期 */
@@ -62,6 +118,8 @@ export interface RegularizationRecord {
   description?: string
   /** 审批记录（按时间正序） */
   approvals: RegularizationApproval[]
+  /** 考核记录（按时间正序） */
+  assessments?: RegularizationAssessment[]
 }
 
 export interface SalaryRecord {
@@ -213,6 +271,88 @@ const buildGrowth = (
 /** 转正文档：飞书云文档预览地址（mock 用本地静态页，接入后换成真实飞书文档链接） */
 const MOCK_REGULARIZATION_DOC_URL = './mock/regularization-doc.html'
 
+/**
+ * 转正考评表模板（考核项目 / 评价要点 / 评价标准 / 项目分值）
+ * 与纸质《员工转正考评表》一致，三组满分合计 100 分
+ */
+export const ASSESSMENT_GROUPS: AssessmentGroupTemplate[] = [
+  {
+    name: '工作业绩',
+    total: 40,
+    items: [
+      { point: '工作态度及任务', standard: '绩效突出，能够很好的完成工作任务', maxScore: 20 },
+      { point: '工作效率', standard: '工作响快，及时完成各项任务，时效性高', maxScore: 10 },
+      { point: '工作质量', standard: '可保证工作质量，无因工作失误而影响公司利益的情况', maxScore: 10 },
+    ],
+  },
+  {
+    name: '工作态度',
+    total: 30,
+    items: [
+      { point: '积极性', standard: '主动了解与公司/岗位有关信息，熟知并遵守公司的各项制度，能对工作提出建设性意见', maxScore: 10 },
+      { point: '纪律性', standard: '遵守公司各项规章制度及上级指示，忠于自己的岗位职责', maxScore: 10 },
+      { point: '团队意识', standard: '自觉维护团队荣誉，不拖团队后腿，有较强的团队向心力', maxScore: 5 },
+      { point: '责任感', standard: '有责任感，工作尽心，敢于承担责任', maxScore: 5 },
+    ],
+  },
+  {
+    name: '综合能力',
+    total: 30,
+    items: [
+      { point: '基础技能', standard: '是否具有扎实的专业知识，并在日常的工作中充分发挥和实践', maxScore: 10 },
+      { point: '沟通表达能力', standard: '有疑问时积极和同事沟通，接纳他人意见，并可以积极主动向上级反馈意见', maxScore: 10 },
+      { point: '执行能力', standard: '能够理解工作要求，执行能力强，处理灵活', maxScore: 5 },
+      { point: '学习能力', standard: '勤奋好学，努力学习各项与工作相关的工作技能，更好的完成工作', maxScore: 5 },
+    ],
+  },
+]
+
+/** 考评结论选项 */
+export const ASSESSMENT_CONCLUSIONS: AssessmentConclusion[] = ['正常转正', '延长试用', '劝退']
+
+/** 考评表底部说明 */
+export const ASSESSMENT_NOTES = [
+  '满分100分，90—100分，同意转正，并可作为重点培养对象；',
+  '80—90分，同意转正，同时部门负责人应加强该员工的各项培训，提升其综合素质；',
+  '80分以下，不能转正，根据实际情况可做延长试用期或辞退处理。',
+]
+
+/** 考评表满分（三组合计） */
+export const ASSESSMENT_MAX_SCORE = ASSESSMENT_GROUPS.reduce((sum, g) => sum + g.total, 0)
+
+/** 考评人角色文案 */
+export const assessmentRoleText = (role: AssessmentRole): string => {
+  if (role === 'directLeader') return '部门直属领导'
+  if (role === 'partnerLeader') return '协作部门'
+  if (role === 'chairman') return '董事长'
+  return '考评人'
+}
+
+/**
+ * 评分表底部意见栏标题（按当前考评人角色切换，只显示一个）
+ * 部门直属领导 → 用人部门意见；协作部门 → 协作部门意见；董事长 → 董事长意见
+ */
+export const assessmentCommentLabel = (role: AssessmentRole): string => {
+  if (role === 'directLeader') return '用人部门意见'
+  if (role === 'partnerLeader') return '协作部门意见'
+  if (role === 'chairman') return '董事长意见'
+  return '意见'
+}
+
+/** 某份考评记录的总得分 */
+export const assessmentTotal = (a: RegularizationAssessment): number =>
+  ASSESSMENT_GROUPS.reduce(
+    (sum, g) => sum + g.items.reduce((s, item) => s + (a.scores[item.point] ?? 0), 0),
+    0,
+  )
+
+/** 默认考勤情况 */
+const DEFAULT_ATTENDANCE: AssessmentAttendance = {
+  late: '0/22',
+  personalLeave: '8/440',
+  sickLeave: '0',
+}
+
 /** 通用：转正文档模板 */
 const buildRegularizationDoc = (
   department: string,
@@ -230,6 +370,27 @@ const buildApproval = (
   time: string,
   comment?: string
 ): RegularizationApproval => ({ node, approver, result, time, comment })
+
+/** 通用：转正考核记录模板 */
+const buildAssessment = (
+  id: string,
+  assessor: string,
+  role: AssessmentRole,
+  time: string,
+  scores: number[][],
+  conclusion: AssessmentConclusion,
+  comment: string,
+  attendance: AssessmentAttendance = DEFAULT_ATTENDANCE,
+): RegularizationAssessment => {
+  // scores 按模板顺序铺平：scores[组下标][组内项下标]
+  const flat: Record<string, number> = {}
+  ASSESSMENT_GROUPS.forEach((g, gi) => {
+    g.items.forEach((it, ii) => {
+      flat[it.point] = scores[gi]?.[ii] ?? 0
+    })
+  })
+  return { id, assessor, role, time, attendance, scores: flat, conclusion, comment }
+}
 
 export const employees: Employee[] = reactive([
 
@@ -307,6 +468,11 @@ export const employees: Employee[] = reactive([
           buildApproval('审批', '李思雨', '已同意', '2022-07-15 11:13'),
           buildApproval('审批', '陈欣宜', '已同意', '2022-07-15 17:53'),
           buildApproval('审批', '张明远', '自动通过', '2022-07-15 17:56', '之前已通过该审批，无需重复审批'),
+        ],
+        assessments: [
+          buildAssessment('a1', '李思雨', 'directLeader', '2022-07-14 18:20', [[19, 9, 9], [9, 10, 5, 4], [9, 9, 5, 4]], '正常转正', '技术能力突出，试用期内独立完成 3 个需求模块，建议按期转正。'),
+          buildAssessment('a2', '陈欣宜', 'partnerLeader', '2022-07-15 10:30', [[20, 9, 10], [10, 10, 5, 4], [9, 10, 4, 4]], '正常转正', '述职表达清晰，文档规范，协作主动，跨部门配合度高。'),
+          buildAssessment('a3', '周建国', 'chairman', '2022-07-18 09:10', [[19, 9, 9], [9, 9, 5, 5], [9, 9, 3, 4]], '正常转正', '试用期内表现稳定，同意按期转正，纳入后备人才库培养。'),
         ],
       },
     ],
@@ -403,6 +569,10 @@ export const employees: Employee[] = reactive([
           buildApproval('提交', '李思雨', '已提交', '2020-11-28 09:24'),
           buildApproval('审批', '陈欣宜', '已同意', '2020-11-28 14:02'),
           buildApproval('审批', '陈秀英', '已同意', '2020-11-30 10:41'),
+        ],
+        assessments: [
+          buildAssessment('a1', '陈欣宜', 'directLeader', '2020-11-27 17:40', [[18, 9, 9], [9, 9, 5, 5], [9, 9, 4, 5]], '正常转正', '需求分析能力强，产品思维清晰，具备独立负责模块的能力。'),
+          buildAssessment('a2', '周建国', 'chairman', '2020-12-01 10:20', [[19, 9, 9], [9, 9, 4, 5], [9, 8, 4, 4]], '正常转正', '试用期内负责的支付项目按期上线，同意按期转正。'),
         ],
       },
     ],
@@ -571,6 +741,10 @@ export const employees: Employee[] = reactive([
           buildApproval('审批', '王丽', '已同意', '2019-08-16 18:12'),
           buildApproval('审批', '张明远', '已同意', '2019-08-19 09:45'),
         ],
+        assessments: [
+          buildAssessment('a1', '王丽', 'directLeader', '2019-08-15 16:10', [[18, 9, 9], [9, 9, 4, 5], [9, 8, 4, 4]], '正常转正', 'HR 专业能力扎实，流程规范，员工关系处理得当。'),
+          buildAssessment('a2', '周建国', 'chairman', '2019-08-19 10:00', [[19, 9, 9], [10, 9, 5, 4], [9, 9, 4, 5]], '正常转正', '试用期内组织协调能力提升明显，同意按期转正。'),
+        ],
       },
     ],
     contracts: [
@@ -666,6 +840,10 @@ export const employees: Employee[] = reactive([
           buildApproval('提交', '刘子昂', '已提交', '2022-05-12 10:05'),
           buildApproval('审批', '李思雨', '已同意', '2022-05-12 15:38'),
         ],
+        assessments: [
+          buildAssessment('a1', '李思雨', 'directLeader', '2022-05-11 16:20', [[15, 8, 8], [8, 8, 4, 4], [7, 7, 3, 4]], '延长试用', '活动执行到位，但主动推进与复盘深度不足，建议延长试用一个月。'),
+          buildAssessment('a2', '陈欣宜', 'partnerLeader', '2022-05-12 09:30', [[16, 8, 8], [8, 8, 4, 4], [7, 8, 3, 4]], '延长试用', '协作部门配合度良好，业务理解仍需加强，暂不建议按期转正。'),
+        ],
       },
     ],
     contracts: [
@@ -751,6 +929,10 @@ export const employees: Employee[] = reactive([
           buildApproval('审批', '张明远', '已同意', '2024-08-29 11:47'),
           buildApproval('审批', '李思雨', '已同意', '2024-08-30 16:20'),
           buildApproval('审批', '赵雨彤', '自动通过', '2024-08-30 16:22', '之前已通过该审批，无需重复审批'),
+        ],
+        assessments: [
+          buildAssessment('a1', '张明远', 'directLeader', '2024-08-28 18:40', [[19, 9, 9], [9, 9, 5, 4], [9, 9, 4, 5]], '正常转正', '设计稿交付质量高，改稿响应快，技术方案落地能力强。'),
+          buildAssessment('a2', '李思雨', 'partnerLeader', '2024-08-29 08:30', [[18, 9, 9], [9, 9, 4, 4], [9, 9, 4, 4]], '正常转正', '视觉还原度高，组件规范落地好，建议按期转正。'),
         ],
       },
     ],
@@ -841,6 +1023,10 @@ export const employees: Employee[] = reactive([
           buildApproval('提交', '孙一鸣', '已提交', '2020-07-08 14:26'),
           buildApproval('审批', '陈欣宜', '已同意', '2020-07-08 17:09'),
           buildApproval('审批', '李思雨', '已同意', '2020-07-09 09:31'),
+        ],
+        assessments: [
+          buildAssessment('a1', '陈欣宜', 'directLeader', '2020-07-08 09:15', [[16, 8, 8], [8, 8, 4, 4], [8, 7, 3, 4]], '延长试用', '制度流程熟悉度良好，但业务理解与主动性仍需加强，建议延长试用。'),
+          buildAssessment('a2', '周建国', 'chairman', '2020-07-10 09:00', [[17, 8, 8], [8, 8, 4, 4], [8, 8, 3, 4]], '正常转正', '试用期内按要求完成市场工作，同意转正，后续需持续提升业务能力。'),
         ],
       },
     ],

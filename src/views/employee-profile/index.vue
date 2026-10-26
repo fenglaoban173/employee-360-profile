@@ -290,7 +290,9 @@
           </a-col>
           <a-col :span="12">
             <a-form-item label="工作地点">
-              <a-input v-model="addForm.workLocation" placeholder="请输入工作地点" />
+              <a-select v-model="addForm.workLocation" placeholder="请选择工作地点" allow-clear>
+                <a-option v-for="w in workLocationOptions" :key="w" :value="w">{{ w }}</a-option>
+              </a-select>
             </a-form-item>
           </a-col>
           <a-col :span="12">
@@ -772,6 +774,9 @@ const employeeCategories = [
   '兼职员工',
 ]
 
+/** 工作地点下拉选项（新增 / 编辑档案表单 + 列表页工作地点筛选共用） */
+const workLocationOptions = ['北京', '上海', '成都', '深圳']
+
 /** 搜索下拉的候选项：来自员工列表的 姓名/工号/部门 */
 const employeeSearchOptions = computed(() =>
   list.map(e => ({
@@ -826,10 +831,11 @@ const workLocationFilter = ref<WorkLocationFilterValue>('all')
 
 const workLocationFilters = computed(() => [
   { value: 'all' as WorkLocationFilterValue, label: '全部', count: list.length },
-  { value: '北京' as WorkLocationFilterValue, label: '北京', count: list.filter(e => e.workLocation === '北京').length },
-  { value: '上海' as WorkLocationFilterValue, label: '上海', count: list.filter(e => e.workLocation === '上海').length },
-  { value: '成都' as WorkLocationFilterValue, label: '成都', count: list.filter(e => e.workLocation === '成都').length },
-  { value: '深圳' as WorkLocationFilterValue, label: '深圳', count: list.filter(e => e.workLocation === '深圳').length },
+  ...workLocationOptions.map(city => ({
+    value: city as WorkLocationFilterValue,
+    label: city,
+    count: list.filter(e => e.workLocation === city).length,
+  })),
 ])
 
 const filteredList = computed(() => {
